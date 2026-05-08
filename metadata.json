@@ -1,0 +1,5 @@
+{
+  "name": "QuickDine",
+  "description": "A multi-restaurant digital ordering and payment platform with QR code table system.",
+  "requestFramePermissions": ["bluetooth"]
+}
