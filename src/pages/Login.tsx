@@ -28,18 +28,15 @@ export default function Login() {
         body: JSON.stringify(body)
       });
 
+      const contentType = res.headers.get("content-type");
       let data;
-      const text = await res.text();
-      try {
-        data = JSON.parse(text);
-      } catch (e) {
-        console.error('Failed to parse JSON response:', text);
-        setError('Server error: received unexpected response.');
-        setLoading(false);
-        return;
+      if (contentType && contentType.indexOf("application/json") !== -1) {
+        data = await res.json();
+      } else {
+        data = { error: "API not available (If on Vercel, backend must be deployed separately)" };
       }
 
-      if (res.ok) {
+      if (res.ok && data && !data.error) {
         // Store user in local storage for simplicity in MVP
         try {
           localStorage.setItem('user', JSON.stringify(data.user));
@@ -61,7 +58,6 @@ export default function Login() {
         setError(data.error || 'Login failed');
       }
     } catch (err) {
-      console.error('Login fetch error:', err);
       setError('Network error. Please try again.');
     } finally {
       setLoading(false);

@@ -41,14 +41,20 @@ export default function Home() {
         const [mealsRes, restRes] = results;
         
         if (mealsRes.status === 'fulfilled') {
-          setMeals(await mealsRes.value.json());
+          const contentType = mealsRes.value.headers.get("content-type");
+          if (contentType && contentType.indexOf("application/json") !== -1) {
+            setMeals(await mealsRes.value.json());
+          }
         } else {
           console.error('Failed to fetch meals:', mealsRes);
         }
         
         if (restRes.status === 'fulfilled') {
-          const allRest = await restRes.value.json();
-          setRestaurants(allRest.filter((r: any) => r.status === 'Active'));
+          const contentType = restRes.value.headers.get("content-type");
+          if (contentType && contentType.indexOf("application/json") !== -1) {
+            const allRest = await restRes.value.json();
+            setRestaurants(allRest.filter((r: any) => r.status === 'Active'));
+          }
         } else {
           console.error('Failed to fetch restaurants:', restRes);
         }
