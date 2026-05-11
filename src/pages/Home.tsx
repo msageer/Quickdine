@@ -41,19 +41,23 @@ export default function Home() {
         const [mealsRes, restRes] = results;
         
         if (mealsRes.status === 'fulfilled') {
-          const contentType = mealsRes.value.headers.get("content-type");
-          if (contentType && contentType.indexOf("application/json") !== -1) {
-            setMeals(await mealsRes.value.json());
+          const text = await mealsRes.value.text();
+          try {
+            setMeals(JSON.parse(text));
+          } catch(e) {
+            console.error('Failed to parse meals JSON, it might be Vercel returning HTML:', text.substring(0, 50));
           }
         } else {
           console.error('Failed to fetch meals:', mealsRes);
         }
         
         if (restRes.status === 'fulfilled') {
-          const contentType = restRes.value.headers.get("content-type");
-          if (contentType && contentType.indexOf("application/json") !== -1) {
-            const allRest = await restRes.value.json();
+          const text = await restRes.value.text();
+          try {
+            const allRest = JSON.parse(text);
             setRestaurants(allRest.filter((r: any) => r.status === 'Active'));
+          } catch(e) {
+            console.error('Failed to parse restaurants JSON, it might be Vercel returning HTML:', text.substring(0, 50));
           }
         } else {
           console.error('Failed to fetch restaurants:', restRes);

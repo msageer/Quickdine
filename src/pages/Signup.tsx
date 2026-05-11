@@ -25,12 +25,12 @@ export default function Signup() {
         body: JSON.stringify({ email, password, restaurantName, businessType })
       });
 
-      const contentType = res.headers.get("content-type");
       let data;
-      if (contentType && contentType.indexOf("application/json") !== -1) {
-        data = await res.json();
-      } else {
-        data = { error: "API not available (If on Vercel, backend must be deployed separately)" };
+      const text = await res.text();
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        throw new Error(`Server error: ${text.substring(0, 50)}...`);
       }
 
       if (res.ok && data && !data.error) {
@@ -39,8 +39,8 @@ export default function Signup() {
       } else {
         setError(data.error || 'Signup failed');
       }
-    } catch (err) {
-      setError('Network error. Please try again.');
+    } catch (err: any) {
+      setError(err.message || 'Network error. Please try again.');
     } finally {
       setLoading(false);
     }
