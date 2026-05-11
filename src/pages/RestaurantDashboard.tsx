@@ -1,11 +1,10 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { motion, AnimatePresence } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
-import { Bell, CheckCircle, Clock, ChefHat, LayoutGrid, ListOrdered, Settings, TrendingUp, Plus, X, QrCode, Edit2, Trash2, ChevronDown, ChevronUp, UtensilsCrossed, Copy, AlertCircle, CheckCircle2, Download, Printer, CreditCard, User, BarChart3, Percent, LogOut, Upload } from 'lucide-react';
+import { Bell, CheckCircle, Clock, ChefHat, LayoutGrid, ListOrdered, Settings, TrendingUp, Plus, X, QrCode, Edit2, Trash2, ChevronDown, ChevronUp, UtensilsCrossed, Copy, AlertCircle, CheckCircle2, Download, Printer, CreditCard, User, BarChart3, Percent, LogOut } from 'lucide-react';
 import { format } from 'date-fns';
-import Papa from 'papaparse';
 import AnalyticsDashboard from '../components/AnalyticsDashboard';
 import RestaurantOnboarding from '../components/RestaurantOnboarding';
 import { fetchWithRetry, apiFetch } from '../lib/utils';
@@ -14,7 +13,6 @@ export default function RestaurantDashboard() {
   const { id } = useParams();
   const [restaurant, setRestaurant] = useState<any>(null);
   const [subscriptionPlans, setSubscriptionPlans] = useState<any[]>([]);
-  const [isBulkUploadModalOpen, setIsBulkUploadModalOpen] = useState(false);
 
   const getCurrencySymbol = (currencyCode: string) => {
     switch (currencyCode) {
@@ -72,19 +70,6 @@ export default function RestaurantDashboard() {
     dietary_badges: '',
     modifiers: ''
   });
-
-  const fetchMenu = async () => {
-    try {
-      const res = await fetchWithRetry(`/api/restaurants/${id}/menu`);
-      if (res.ok) {
-        const data = await res.json();
-        setCategories(data.categories);
-        setMenuItems(data.items);
-      }
-    } catch (e) {
-      console.error('Failed to fetch menu', e);
-    }
-  };
 
   const fetchAnalytics = async () => {
     try {
@@ -443,43 +428,6 @@ export default function RestaurantDashboard() {
         }
       } catch (err) {
         console.error('Failed to delete category', err);
-      }
-    });
-  };
-
-  const handleBulkUpload = async (file: File) => {
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: async (results) => {
-        const items = results.data.map((row: any) => ({
-          category_name: row.Category || row.category,
-          name: row.Name || row.name,
-          description: row.Description || row.description,
-          price: parseFloat(row.Price || row.price || 0),
-          prep_time: parseInt(row.PrepTime || row.preptime || row['Prep Time'] || row['prep_time'] || 15)
-        }));
-
-        try {
-          const res = await apiFetch(`/api/restaurants/${id}/menu/bulk`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ items })
-          });
-          if (res.ok) {
-            alert('Menu imported successfully!');
-            setIsBulkUploadModalOpen(false);
-            fetchMenu();
-          } else {
-            const err = await res.json();
-            alert('Error importing menu: ' + err.error);
-          }
-        } catch (e: any) {
-          alert('Network error importing menu');
-        }
-      },
-      error: (error) => {
-        alert('Error reading CSV: ' + error.message);
       }
     });
   };
@@ -964,13 +912,6 @@ export default function RestaurantDashboard() {
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <h1 className="text-2xl font-bold text-ink-900 font-serif">Menu Management</h1>
                 <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-                  <button 
-                    onClick={() => setIsBulkUploadModalOpen(true)}
-                    className="bg-white text-ink-700 border border-ink-200 px-4 py-2 rounded-lg font-medium hover:bg-ink-50 flex items-center justify-center shadow-sm transition-colors w-full sm:w-auto"
-                  >
-                    <Upload className="w-5 h-5 mr-2" />
-                    Bulk Upload
-                  </button>
                   <button 
                     onClick={() => setIsAddCategoryModalOpen(true)}
                     className="bg-white text-ink-700 border border-ink-200 px-4 py-2 rounded-lg font-medium hover:bg-ink-50 flex items-center justify-center shadow-sm transition-colors w-full sm:w-auto"
@@ -2435,66 +2376,6 @@ export default function RestaurantDashboard() {
                     </button>
                   </div>
                 </form>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-
-      {/* Bulk Upload Modal */}
-      <AnimatePresence>
-        {isBulkUploadModalOpen && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsBulkUploadModalOpen(false)}
-              className="fixed inset-0 bg-ink-900/40 backdrop-blur-sm z-50"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white rounded-2xl shadow-xl z-50 border border-ink-100 overflow-hidden"
-            >
-              <div className="p-6">
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-xl font-bold text-ink-900 font-serif flex items-center">
-                    <Upload className="w-5 h-5 mr-2 text-brand-500" />
-                    Bulk Upload Menu
-                  </h3>
-                  <button 
-                    onClick={() => setIsBulkUploadModalOpen(false)}
-                    className="text-ink-400 hover:text-ink-600 bg-white p-2 rounded-full shadow-sm border border-ink-100 transition-colors"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                
-                <div className="space-y-4">
-                  <p className="text-sm text-ink-600 border-l-2 border-brand-500 pl-3">
-                    Upload a CSV file to add multiple items at once.
-                    The CSV should contain these columns: <strong>Category, Name, Description, Price, Prep Time</strong>.
-                  </p>
-                  
-                  <div className="mt-4 border-2 border-dashed border-ink-200 rounded-xl p-8 flex flex-col justify-center items-center">
-                    <Upload className="w-10 h-10 text-ink-300 mb-2" />
-                    <label className="bg-brand-500 text-white font-bold py-2 px-6 rounded-xl hover:bg-brand-600 transition-colors cursor-pointer shadow-sm text-sm">
-                      Select CSV File
-                      <input 
-                        type="file" 
-                        accept=".csv"
-                        className="hidden" 
-                        onChange={(e) => {
-                          if (e.target.files && e.target.files.length > 0) {
-                            handleBulkUpload(e.target.files[0]);
-                          }
-                        }}
-                      />
-                    </label>
-                  </div>
-                </div>
               </div>
             </motion.div>
           </>

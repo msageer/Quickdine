@@ -27,7 +27,7 @@ export default function Signup() {
 
       const data = await res.json();
 
-      if (res.ok && data && !data.error) {
+      if (res.ok) {
         setSuccess(true);
         setTimeout(() => navigate('/login'), 5000);
       } else {

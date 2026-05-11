@@ -30,7 +30,7 @@ export default function Login() {
 
       const data = await res.json();
 
-      if (res.ok && data && !data.error) {
+      if (res.ok) {
         // Store user in local storage for simplicity in MVP
         try {
           localStorage.setItem('user', JSON.stringify(data.user));
