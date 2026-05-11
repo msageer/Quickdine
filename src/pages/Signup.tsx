@@ -25,9 +25,15 @@ export default function Signup() {
         body: JSON.stringify({ email, password, restaurantName, businessType })
       });
 
-      const data = await res.json();
+      const contentType = res.headers.get("content-type");
+      let data;
+      if (contentType && contentType.indexOf("application/json") !== -1) {
+        data = await res.json();
+      } else {
+        data = { error: "API not available (If on Vercel, backend must be deployed separately)" };
+      }
 
-      if (res.ok) {
+      if (res.ok && data && !data.error) {
         setSuccess(true);
         setTimeout(() => navigate('/login'), 5000);
       } else {
