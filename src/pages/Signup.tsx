@@ -25,7 +25,16 @@ export default function Signup() {
         body: JSON.stringify({ email, password, restaurantName, businessType })
       });
 
-      const data = await res.json();
+      let data;
+      const text = await res.text();
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        console.error('Failed to parse JSON response:', text);
+        setError('Server error: received unexpected response.');
+        setLoading(false);
+        return;
+      }
 
       if (res.ok) {
         setSuccess(true);
@@ -34,6 +43,7 @@ export default function Signup() {
         setError(data.error || 'Signup failed');
       }
     } catch (err) {
+      console.error('Fetch error:', err);
       setError('Network error. Please try again.');
     } finally {
       setLoading(false);

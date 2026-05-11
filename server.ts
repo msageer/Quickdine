@@ -541,8 +541,9 @@ app.post('/api/auth/signup', (req, res) => {
     console.log(`[EMAIL MOCK] Verification link for ${email}: /verify-email?token=${verificationToken}`);
 
     res.json({ success: true, message: 'Signup successful. Please check your email to verify your account.' });
-  } catch (error) {
-    res.status(500).json({ error: 'Signup failed. Email might already be in use.' });
+  } catch (error: any) {
+    console.error('[SIGNUP ERROR]', error);
+    res.status(500).json({ error: 'Signup failed. ' + (error.message || 'Email might already be in use.') });
   }
 });
 
@@ -1018,6 +1019,43 @@ app.get('/api/restaurants/:id/menu', (req, res) => {
   } catch (error) {
     console.error('Error fetching menu:', error);
     res.status(500).json({ error: 'Failed to fetch menu' });
+  }
+});
+
+app.post('/api/restaurants/:id/menu/bulk', authenticateToken, requireRestaurantAccess, (req, res) => {
+  const { items } = req.body;
+  const restaurant_id = req.params.id;
+  
+  try {
+    const transaction = db.transaction(() => {
+      const categoriesMap = new Map();
+      const catQuery = db.prepare('SELECT id FROM menu_categories WHERE restaurant_id = ? AND name = ?');
+      const catInsert = db.prepare('INSERT INTO menu_categories (restaurant_id, name) VALUES (?, ?)');
+      const itemInsert = db.prepare('INSERT INTO menu_items (restaurant_id, category_id, name, description, price, prep_time, status) VALUES (?, ?, ?, ?, ?, ?, ?)');
+
+      for (const item of items) {
+        if (!item.category_name || !item.name || item.price === undefined) continue;
+
+        let cat_id = categoriesMap.get(item.category_name);
+        if (!cat_id) {
+          const cat = catQuery.get(restaurant_id, item.category_name) as any;
+          if (cat) {
+            cat_id = cat.id;
+          } else {
+            cat_id = catInsert.run(restaurant_id, item.category_name).lastInsertRowid;
+          }
+          categoriesMap.set(item.category_name, cat_id);
+        }
+        
+        itemInsert.run(restaurant_id, cat_id, item.name, item.description || null, item.price, item.prep_time || 15, 'Available');
+      }
+    });
+
+    transaction();
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('Bulk upload error:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 

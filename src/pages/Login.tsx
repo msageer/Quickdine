@@ -28,7 +28,16 @@ export default function Login() {
         body: JSON.stringify(body)
       });
 
-      const data = await res.json();
+      let data;
+      const text = await res.text();
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        console.error('Failed to parse JSON response:', text);
+        setError('Server error: received unexpected response.');
+        setLoading(false);
+        return;
+      }
 
       if (res.ok) {
         // Store user in local storage for simplicity in MVP
@@ -52,6 +61,7 @@ export default function Login() {
         setError(data.error || 'Login failed');
       }
     } catch (err) {
+      console.error('Login fetch error:', err);
       setError('Network error. Please try again.');
     } finally {
       setLoading(false);
