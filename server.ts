@@ -1,5 +1,4 @@
 import express from 'express';
-import { createServer as createViteServer } from 'vite';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import Database from 'better-sqlite3';
@@ -87,10 +86,15 @@ let dbPath = 'quickdine.db';
 
 if (process.env.VERCEL) {
   dbPath = path.join('/tmp', 'quickdine.db');
-  const sourceDbPath = path.join(__dirname, 'quickdine.db');
+  let sourceDbPath = path.join(__dirname, 'quickdine.db');
+  if (!fs.existsSync(sourceDbPath)) {
+    sourceDbPath = path.join(process.cwd(), 'quickdine.db');
+  }
   if (fs.existsSync(sourceDbPath) && !fs.existsSync(dbPath)) {
     try {
       fs.copyFileSync(sourceDbPath, dbPath);
+      if (fs.existsSync(sourceDbPath + '-wal')) fs.copyFileSync(sourceDbPath + '-wal', dbPath + '-wal');
+      if (fs.existsSync(sourceDbPath + '-shm')) fs.copyFileSync(sourceDbPath + '-shm', dbPath + '-shm');
       console.log('Copied quickdine.db to /tmp for Vercel');
     } catch (e) {
       console.error('Failed to copy db to /tmp', e);
@@ -2296,6 +2300,7 @@ async function startServer() {
   app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
@@ -2309,18 +2314,18 @@ async function startServer() {
     });
   }
 
-  // Global error handler
-  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-    console.error('Unhandled Global Error:', err);
-    res.status(500).json({ error: err.message || 'Internal Server Error' });
-  });
-
   if (!process.env.VERCEL) {
     httpServer.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running on http://localhost:${PORT}`);
     });
   }
 }
+
+// Global error handler
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('Unhandled Global Error:', err);
+  res.status(500).json({ error: err.message || 'Internal Server Error' });
+});
 
 startServer();
 
