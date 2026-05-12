@@ -14,7 +14,7 @@ import crypto from 'crypto';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const JWT_SECRET = process.env.JWT_SECRET || 'quickdine-super-secret-key-48h';
 
-const uploadDir = path.join(__dirname, 'uploads');
+const uploadDir = process.env.VERCEL ? path.join('/tmp', 'uploads') : path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
@@ -83,7 +83,22 @@ const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KE
 const PORT = 3000;
 
 // Database setup
-const db = new Database('quickdine.db');
+let dbPath = 'quickdine.db';
+
+if (process.env.VERCEL) {
+  dbPath = path.join('/tmp', 'quickdine.db');
+  const sourceDbPath = path.join(__dirname, 'quickdine.db');
+  if (fs.existsSync(sourceDbPath) && !fs.existsSync(dbPath)) {
+    try {
+      fs.copyFileSync(sourceDbPath, dbPath);
+      console.log('Copied quickdine.db to /tmp for Vercel');
+    } catch (e) {
+      console.error('Failed to copy db to /tmp', e);
+    }
+  }
+}
+
+const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
 
 // Initialize DB schema
