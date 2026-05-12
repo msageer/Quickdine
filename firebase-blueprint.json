@@ -1,0 +1,39 @@
+{
+  "entities": {
+    "Restaurant": {
+      "title": "Restaurant",
+      "description": "A restaurant tenant",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "status": { "type": "string" },
+        "currency": { "type": "string" },
+        "subscription_plan_id": { "type": "number" },
+        "subscription_status": { "type": "string" },
+        "business_type": { "type": "string" }
+      },
+      "required": ["name", "status"]
+    },
+    "User": {
+      "title": "User",
+      "description": "A system user",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "role": { "type": "string" },
+        "restaurant_id": { "type": "string" }
+      },
+      "required": ["email", "role"]
+    }
+  },
+  "firestore": {
+    "/restaurants/{restaurantId}": {
+      "schema": { "$ref": "#/entities/Restaurant" },
+      "description": "Stores restaurant details"
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores user profiles"
+    }
+  }
+}
