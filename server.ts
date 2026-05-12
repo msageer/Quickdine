@@ -11,6 +11,9 @@ import multer from 'multer';
 import fs from 'fs';
 import crypto from 'crypto';
 
+import authRouter from './api/auth.js';
+import restaurantsRouter from './api/restaurants.js';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const JWT_SECRET = process.env.JWT_SECRET || 'quickdine-super-secret-key-48h';
 
@@ -469,109 +472,8 @@ if (count.count === 0) {
 app.use(express.json());
 
 // API Routes
-app.post('/api/auth/login', (req, res) => {
-  const { email, password } = req.body;
-  const user = db.prepare('SELECT * FROM users WHERE email = ? AND password = ?').get(email, password) as any;
-  
-  if (!user) {
-    return res.status(401).json({ error: 'Invalid credentials' });
-  }
-
-  if (user.role === 'restaurant' && !user.email_verified) {
-    return res.status(403).json({ error: 'Please verify your email before logging in. Check your inbox for the verification link.' });
-  }
-  
-  try {
-    db.prepare('INSERT INTO user_logins (user_id) VALUES (?)').run(user.id);
-  } catch (e) {
-    console.error('Error logging user login:', e);
-  }
-  
-  const token = jwt.sign({ id: user.id, role: user.role, restaurant_id: user.restaurant_id }, JWT_SECRET, { expiresIn: '48h' });
-  res.json({ success: true, user, token });
-});
-
-app.post('/api/auth/waiter-login', (req, res) => {
-  const { phone_number, pin } = req.body;
-  const user = db.prepare("SELECT * FROM users WHERE phone_number = ? AND pin = ? AND role = 'waiter'").get(phone_number, pin) as any;
-  if (!user) {
-    return res.status(401).json({ error: 'Invalid phone number or PIN' });
-  }
-  try {
-    db.prepare('INSERT INTO user_logins (user_id) VALUES (?)').run(user.id);
-  } catch (e) {}
-  
-  const token = jwt.sign({ id: user.id, role: user.role, restaurant_id: user.restaurant_id }, JWT_SECRET, { expiresIn: '48h' });
-  res.json({ success: true, user, token });
-});
-
-app.post('/api/auth/signup', (req, res) => {
-  const { email, password, restaurantName, businessType } = req.body;
-  
-  try {
-    const settings = db.prepare('SELECT default_currency FROM platform_settings LIMIT 1').get() as any;
-    const defaultCurrency = settings ? settings.default_currency : 'USD';
-
-    // Get the Professional plan ID for testing
-    const proPlan = db.prepare("SELECT id FROM subscription_plans WHERE plan_name = 'Professional' LIMIT 1").get() as any;
-    const planId = proPlan ? proPlan.id : 2;
-    
-    // Calculate expiry date (1 month from now)
-    const expiryDate = new Date();
-    expiryDate.setMonth(expiryDate.getMonth() + 1);
-    const expiryDateStr = expiryDate.toISOString();
-
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-    const verificationExpires = new Date();
-    verificationExpires.setHours(verificationExpires.getHours() + 24); // 24 hours
-
-    const transaction = db.transaction(() => {
-      const insertRestaurant = db.prepare('INSERT INTO restaurants (name, status, currency, subscription_plan_id, subscription_status, subscription_expiry_date, business_type) VALUES (?, ?, ?, ?, ?, ?, ?)');
-      const resId = insertRestaurant.run(restaurantName, 'Pending', defaultCurrency, planId, 'Active', expiryDateStr, businessType || 'restaurant').lastInsertRowid;
-      
-      const insertUser = db.prepare('INSERT INTO users (email, password, role, restaurant_id, verification_token, verification_expires) VALUES (?, ?, ?, ?, ?, ?)');
-      insertUser.run(email, password, 'restaurant', resId, verificationToken, verificationExpires.toISOString());
-      
-      return resId;
-    });
-    
-    const resId = transaction();
-    
-    // In a real app, send email here. For now, we log it.
-    console.log(`[EMAIL MOCK] Verification link for ${email}: /verify-email?token=${verificationToken}`);
-
-    res.json({ success: true, message: 'Signup successful. Please check your email to verify your account.' });
-  } catch (error) {
-    res.status(500).json({ error: 'Signup failed. Email might already be in use.' });
-  }
-});
-
-app.post('/api/auth/verify-email', (req, res) => {
-  const { token } = req.body;
-  
-  if (!token) {
-    return res.status(400).json({ error: 'Verification token is required' });
-  }
-
-  try {
-    const user = db.prepare('SELECT * FROM users WHERE verification_token = ?').get(token) as any;
-    
-    if (!user) {
-      return res.status(400).json({ error: 'Invalid verification token' });
-    }
-
-    if (new Date(user.verification_expires) < new Date()) {
-      return res.status(400).json({ error: 'Verification token has expired' });
-    }
-
-    db.prepare('UPDATE users SET email_verified = 1, verification_token = NULL, verification_expires = NULL WHERE id = ?').run(user.id);
-    
-    res.json({ success: true, message: 'Email verified successfully' });
-  } catch (error) {
-    console.error('Email verification error:', error);
-    res.status(500).json({ error: 'Failed to verify email' });
-  }
-});
+app.use('/api/auth', authRouter);
+app.use('/api/restaurants', restaurantsRouter);
 
 app.patch('/api/admin/restaurants/:id/status', authenticateToken, authorizeRole(['admin']), (req, res) => {
   const { status } = req.body;
@@ -938,37 +840,6 @@ app.get('/api/public/settings', (req, res) => {
   }
 });
 
-app.get('/api/restaurants', (req, res) => {
-  try {
-    const restaurants = db.prepare(`
-      SELECT r.*, u.email as owner_email
-      FROM restaurants r
-      LEFT JOIN users u ON r.id = u.restaurant_id AND u.role = 'restaurant'
-    `).all() as any[];
-    
-    const platformSettings = db.prepare('SELECT payment_paystack_enabled, paystack_public_key, payment_monnify_enabled, monnify_api_key, monnify_contract_code, payment_flutterwave_enabled, flutterwave_public_key FROM platform_settings LIMIT 1').get() as any;
-    if (platformSettings) {
-      restaurants.forEach(r => {
-        r.platform_paystack_enabled = platformSettings.payment_paystack_enabled;
-        r.platform_monnify_enabled = platformSettings.payment_monnify_enabled;
-        r.platform_flutterwave_enabled = platformSettings.payment_flutterwave_enabled;
-        r.payment_paystack_enabled = platformSettings.payment_paystack_enabled === 1 ? r.payment_paystack_enabled : 0;
-        r.paystack_public_key = platformSettings.paystack_public_key;
-        r.payment_monnify_enabled = platformSettings.payment_monnify_enabled === 1 ? r.payment_monnify_enabled : 0;
-        r.monnify_api_key = platformSettings.monnify_api_key;
-        r.monnify_contract_code = platformSettings.monnify_contract_code;
-        r.payment_flutterwave_enabled = platformSettings.payment_flutterwave_enabled === 1 ? r.payment_flutterwave_enabled : 0;
-        r.flutterwave_public_key = platformSettings.flutterwave_public_key;
-      });
-    }
-    
-    res.json(restaurants);
-  } catch (error) {
-    console.error('Error fetching restaurants:', error);
-    res.status(500).json({ error: 'Failed to fetch restaurants' });
-  }
-});
-
 app.get('/api/meals', (req, res) => {
   try {
     const meals = db.prepare(`
@@ -981,32 +852,6 @@ app.get('/api/meals', (req, res) => {
   } catch (error) {
     console.error('Error fetching meals:', error);
     res.status(500).json({ error: 'Failed to fetch meals' });
-  }
-});
-
-app.get('/api/restaurants/:id', (req, res) => {
-  try {
-    const restaurant = db.prepare('SELECT * FROM restaurants WHERE id = ?').get(req.params.id) as any;
-    if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
-    
-    const platformSettings = db.prepare('SELECT payment_paystack_enabled, paystack_public_key, payment_monnify_enabled, monnify_api_key, monnify_contract_code, payment_flutterwave_enabled, flutterwave_public_key FROM platform_settings LIMIT 1').get() as any;
-    if (platformSettings) {
-      restaurant.platform_paystack_enabled = platformSettings.payment_paystack_enabled;
-      restaurant.platform_monnify_enabled = platformSettings.payment_monnify_enabled;
-      restaurant.platform_flutterwave_enabled = platformSettings.payment_flutterwave_enabled;
-      restaurant.payment_paystack_enabled = platformSettings.payment_paystack_enabled === 1 ? restaurant.payment_paystack_enabled : 0;
-      restaurant.paystack_public_key = platformSettings.paystack_public_key;
-      restaurant.payment_monnify_enabled = platformSettings.payment_monnify_enabled === 1 ? restaurant.payment_monnify_enabled : 0;
-      restaurant.monnify_api_key = platformSettings.monnify_api_key;
-      restaurant.monnify_contract_code = platformSettings.monnify_contract_code;
-      restaurant.payment_flutterwave_enabled = platformSettings.payment_flutterwave_enabled === 1 ? restaurant.payment_flutterwave_enabled : 0;
-      restaurant.flutterwave_public_key = platformSettings.flutterwave_public_key;
-    }
-    
-    res.json(restaurant);
-  } catch (error) {
-    console.error('Error fetching restaurant details:', error);
-    res.status(500).json({ error: 'Failed to fetch restaurant details' });
   }
 });
 
