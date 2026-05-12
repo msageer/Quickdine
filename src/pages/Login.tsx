@@ -28,15 +28,9 @@ export default function Login() {
         body: JSON.stringify(body)
       });
 
-      let data;
-      const text = await res.text();
-      try {
-        data = JSON.parse(text);
-      } catch (e) {
-        throw new Error(`Server error: ${text.substring(0, 50)}...`);
-      }
+      const data = await res.json();
 
-      if (res.ok && data && !data.error) {
+      if (res.ok) {
         // Store user in local storage for simplicity in MVP
         try {
           localStorage.setItem('user', JSON.stringify(data.user));
@@ -57,8 +51,8 @@ export default function Login() {
       } else {
         setError(data.error || 'Login failed');
       }
-    } catch (err: any) {
-      setError(err.message || 'Network error. Please try again.');
+    } catch (err) {
+      setError('Network error. Please try again.');
     } finally {
       setLoading(false);
     }

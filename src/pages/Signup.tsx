@@ -25,22 +25,16 @@ export default function Signup() {
         body: JSON.stringify({ email, password, restaurantName, businessType })
       });
 
-      let data;
-      const text = await res.text();
-      try {
-        data = JSON.parse(text);
-      } catch (e) {
-        throw new Error(`Server error: ${text.substring(0, 50)}...`);
-      }
+      const data = await res.json();
 
-      if (res.ok && data && !data.error) {
+      if (res.ok) {
         setSuccess(true);
         setTimeout(() => navigate('/login'), 5000);
       } else {
         setError(data.error || 'Signup failed');
       }
-    } catch (err: any) {
-      setError(err.message || 'Network error. Please try again.');
+    } catch (err) {
+      setError('Network error. Please try again.');
     } finally {
       setLoading(false);
     }
