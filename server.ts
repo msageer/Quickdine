@@ -12,7 +12,7 @@ import crypto from 'crypto';
 
 import nodemailer from 'nodemailer';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const rootDir = process.cwd();
 const JWT_SECRET = process.env.JWT_SECRET || 'quickdine-super-secret-key-48h';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -33,16 +33,20 @@ const defaultFrom = process.env.SMTP_FROM || 'QuickDine <noreply@quickdine.examp
 async function sendPlatformEmail(to: string, subject: string, html: string) {
   if (resend) {
     try {
-      await resend.emails.send({
+      const { data, error } = await resend.emails.send({
         from: 'QuickDine <onboarding@resend.dev>', // Users must change this to their verified domain
         to,
         subject,
         html,
       });
-      console.log(`[Resend] Email sent to ${to}`);
-      return;
+      if (error) {
+        console.error(`[Resend] Failed to send email to ${to}:`, error);
+      } else {
+        console.log(`[Resend] Email sent to ${to}`);
+        return;
+      }
     } catch (e) {
-      console.error(`[Resend] Failed to send email to ${to}:`, e);
+      console.error(`[Resend] Exception sending email to ${to}:`, e);
     }
   }
 
@@ -65,7 +69,7 @@ async function sendPlatformEmail(to: string, subject: string, html: string) {
   console.log(`[EMAIL MOCK HTML] ${html}`);
 }
 
-const uploadDir = process.env.VERCEL ? path.join('/tmp', 'uploads') : path.join(__dirname, 'uploads');
+const uploadDir = process.env.VERCEL ? path.join('/tmp', 'uploads') : path.join(rootDir, 'uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
@@ -136,7 +140,7 @@ let dbPath = 'quickdine.db';
 
 if (process.env.VERCEL) {
   dbPath = path.join('/tmp', 'quickdine.db');
-  let sourceDbPath = path.join(__dirname, 'quickdine.db');
+  let sourceDbPath = path.join(rootDir, 'quickdine.db');
   if (!fs.existsSync(sourceDbPath)) {
     sourceDbPath = path.join(process.cwd(), 'quickdine.db');
   }
@@ -547,7 +551,10 @@ app.post('/api/auth/login', (req, res) => {
   }
 
   if (user.role === 'restaurant' && !user.email_verified) {
-    return res.status(403).json({ error: 'Please verify your email before logging in. Check your inbox for the verification link.' });
+    const restaurant = db.prepare('SELECT account_verified FROM restaurants WHERE id = ?').get(user.restaurant_id) as any;
+    if (!restaurant || restaurant.account_verified !== 1) {
+      return res.status(403).json({ error: 'Please verify your email before logging in. Check your inbox for the verification link.' });
+    }
   }
   
   try {
@@ -574,7 +581,7 @@ app.post('/api/auth/waiter-login', (req, res) => {
   res.json({ success: true, user, token });
 });
 
-app.post('/api/auth/signup', (req, res) => {
+app.post('/api/auth/signup', async (req, res) => {
   const { email, password, restaurantName, businessType } = req.body;
   
   try {
@@ -620,10 +627,11 @@ app.post('/api/auth/signup', (req, res) => {
       </div>
     `;
     
-    sendPlatformEmail(email, 'Verify Your QuickDine Account', emailHtml);
+    await sendPlatformEmail(email, 'Verify Your QuickDine Account', emailHtml);
 
     res.json({ success: true, message: 'Signup successful. Please check your email to verify your account.' });
   } catch (error) {
+    console.error('Registration error:', error);
     res.status(500).json({ error: 'Signup failed. Email might already be in use.' });
   }
 });
@@ -1562,15 +1570,27 @@ app.delete('/api/admin/restaurants/:id', authenticateToken, authorizeRole(['admi
 
 app.patch('/api/admin/restaurants/:id/verify-account', authenticateToken, authorizeRole(['admin']), (req, res) => {
   const { status } = req.body; // 0=Pending, 1=Verified, 2=Rejected
-  const restaurant_id = req.params.id;
+  const restaurant_id = parseInt(req.params.id);
   
   try {
-    const result = db.prepare('UPDATE restaurants SET account_verified = ? WHERE id = ?').run(status, restaurant_id);
-    if (result.changes === 0) {
+    const transaction = db.transaction(() => {
+      const result = db.prepare('UPDATE restaurants SET account_verified = ? WHERE id = ?').run(status, restaurant_id);
+      if (result.changes === 0) {
+        return false;
+      }
+      if (status === 1) {
+        db.prepare('UPDATE users SET email_verified = 1 WHERE restaurant_id = ? AND role = ?').run(restaurant_id, 'restaurant');
+      }
+      return true;
+    });
+
+    if (!transaction()) {
       return res.status(404).json({ error: 'Restaurant not found' });
     }
+    
     res.json({ success: true });
   } catch (error: any) {
+    console.error('Verify account error:', error);
     res.status(500).json({ error: 'Failed to update verification status' });
   }
 });
@@ -1725,12 +1745,29 @@ app.delete('/api/admin/users/:id', authenticateToken, authorizeRole(['admin']), 
 
 app.patch('/api/admin/users/:id/verify', authenticateToken, authorizeRole(['admin']), (req, res) => {
   try {
-    const { id } = req.params;
-    db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(id);
+    const id = parseInt(req.params.id, 10);
+    const transaction = db.transaction(() => {
+      const result = db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(id);
+      if (result.changes === 0) {
+        return false;
+      }
+      
+      const user = db.prepare('SELECT role, restaurant_id FROM users WHERE id = ?').get(id) as any;
+      if (user && user.restaurant_id) {
+        db.prepare("UPDATE restaurants SET account_verified = 1, status = 'Active' WHERE id = ?").run(user.restaurant_id);
+      }
+      
+      return true;
+    });
+
+    if (!transaction()) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
     res.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error verifying user:', error);
-    res.status(500).json({ error: 'Failed to verify user' });
+    res.status(500).json({ error: 'Failed to verify user: ' + error.message });
   }
 });
 
@@ -2412,7 +2449,7 @@ io.on('connection', (socket) => {
 });
 
 async function startServer() {
-  app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+  app.use('/uploads', express.static(path.join(rootDir, 'uploads')));
 
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
@@ -2422,7 +2459,7 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(__dirname, 'dist');
+    const distPath = path.join(rootDir, 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));

@@ -1983,6 +1983,9 @@ export default function AdminDashboard() {
                                     setSelectedRestaurant({...selectedRestaurant, account_verified: 1});
                                     // Update in list
                                     setRestaurants(restaurants.map(r => r.id === selectedRestaurant.id ? {...r, account_verified: 1} : r));
+                                  } else {
+                                    const data = await res.json();
+                                    showToast(data.error || 'Failed to verify account');
                                   }
                                 } catch (e) {
                                   showToast('Failed to verify account');
@@ -2005,6 +2008,9 @@ export default function AdminDashboard() {
                                       showToast('Account rejected', 'success');
                                       setSelectedRestaurant({...selectedRestaurant, account_verified: 2});
                                       setRestaurants(restaurants.map(r => r.id === selectedRestaurant.id ? {...r, account_verified: 2} : r));
+                                    } else {
+                                      const data = await res.json();
+                                      showToast(data.error || 'Failed to reject account');
                                     }
                                   } catch (e) {
                                     showToast('Failed to reject account');
