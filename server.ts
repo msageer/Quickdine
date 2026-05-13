@@ -10,8 +10,60 @@ import multer from 'multer';
 import fs from 'fs';
 import crypto from 'crypto';
 
+import nodemailer from 'nodemailer';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const JWT_SECRET = process.env.JWT_SECRET || 'quickdine-super-secret-key-48h';
+
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+
+// Configure Nodemailer transporter
+const mailTransporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || 'smtp.ethereal.email',
+  port: parseInt(process.env.SMTP_PORT || '587'),
+  secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
+const defaultFrom = process.env.SMTP_FROM || 'QuickDine <noreply@quickdine.example.com>';
+
+async function sendPlatformEmail(to: string, subject: string, html: string) {
+  if (resend) {
+    try {
+      await resend.emails.send({
+        from: 'QuickDine <onboarding@resend.dev>', // Users must change this to their verified domain
+        to,
+        subject,
+        html,
+      });
+      console.log(`[Resend] Email sent to ${to}`);
+      return;
+    } catch (e) {
+      console.error(`[Resend] Failed to send email to ${to}:`, e);
+    }
+  }
+
+  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      await mailTransporter.sendMail({
+        from: defaultFrom,
+        to,
+        subject,
+        html,
+      });
+      console.log(`[SMTP] Email sent to ${to}`);
+      return;
+    } catch (e) {
+      console.error(`[SMTP] Failed to send email to ${to}:`, e);
+    }
+  }
+
+  console.log(`[EMAIL MOCK] To: ${to} | Subject: ${subject}`);
+  console.log(`[EMAIL MOCK HTML] ${html}`);
+}
 
 const uploadDir = process.env.VERCEL ? path.join('/tmp', 'uploads') : path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) {
@@ -76,8 +128,6 @@ const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: { origin: '*' }
 });
-
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 const PORT = 3000;
 
@@ -556,8 +606,21 @@ app.post('/api/auth/signup', (req, res) => {
     
     const resId = transaction();
     
-    // In a real app, send email here. For now, we log it.
-    console.log(`[EMAIL MOCK] Verification link for ${email}: /verify-email?token=${verificationToken}`);
+    const verificationUrl = `${process.env.APP_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}`;
+    const emailHtml = `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 10px;">
+        <h2 style="color: #333;">Verify Your QuickDine Account</h2>
+        <p style="font-size: 16px; color: #555;">Hello,</p>
+        <p style="font-size: 16px; color: #555;">Thank you for registering your restaurant (${restaurantName}) on QuickDine.</p>
+        <p style="font-size: 16px; color: #555;">Please click the button below to verify your email address:</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${verificationUrl}" style="background-color: #F27D26; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">Verify Email</a>
+        </div>
+        <p style="font-size: 14px; color: #999;">If you didn't request this, you can safely ignore this email.</p>
+      </div>
+    `;
+    
+    sendPlatformEmail(email, 'Verify Your QuickDine Account', emailHtml);
 
     res.json({ success: true, message: 'Signup successful. Please check your email to verify your account.' });
   } catch (error) {
@@ -1420,19 +1483,66 @@ app.patch('/api/restaurants/:id/settings', authenticateToken, requireRestaurantA
   }
 });
 
+app.post('/api/admin/restaurants', authenticateToken, authorizeRole(['admin']), (req, res) => {
+  const { name, owner_email, owner_password, business_type } = req.body;
+  if (!name || !owner_email || !owner_password) {
+    return res.status(400).json({ error: 'Name, owner email, and owner password are required' });
+  }
+
+  try {
+    const defaultCurrency = db.prepare('SELECT default_currency FROM platform_settings LIMIT 1').get() as any;
+    const plan = db.prepare("SELECT id FROM subscription_plans WHERE plan_name = 'Starter' LIMIT 1").get() as any;
+    
+    const transaction = db.transaction(() => {
+      const existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get(owner_email);
+      if (existingUser) throw new Error('Email already in use');
+
+      const resId = db.prepare('INSERT INTO restaurants (name, status, currency, subscription_plan_id, subscription_status, business_type) VALUES (?, ?, ?, ?, ?, ?)').run(
+        name, 'Active', defaultCurrency ? defaultCurrency.default_currency : 'USD', plan ? plan.id : 1, 'Active', business_type || 'restaurant'
+      ).lastInsertRowid;
+      
+      db.prepare('INSERT INTO users (email, password, role, restaurant_id, email_verified) VALUES (?, ?, ?, ?, 1)').run(owner_email, owner_password, 'restaurant', resId);
+      
+      return resId;
+    });
+    
+    transaction();
+    res.json({ success: true, message: 'Restaurant created successfully' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to create restaurant' });
+  }
+});
+
+app.post('/api/admin/restaurants/:id/reset-password', authenticateToken, authorizeRole(['admin']), (req, res) => {
+  const { new_password } = req.body;
+  if (!new_password) return res.status(400).json({ error: 'New password is required' });
+
+  try {
+    const result = db.prepare('UPDATE users SET password = ? WHERE restaurant_id = ? AND role = \'restaurant\'').run(new_password, req.params.id);
+    if (result.changes > 0) {
+      res.json({ success: true, message: 'Password reset successfully' });
+    } else {
+      res.status(404).json({ error: 'Owner account not found for this restaurant' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
 app.delete('/api/admin/restaurants/:id', authenticateToken, authorizeRole(['admin']), (req, res) => {
   const restaurant_id = req.params.id;
   try {
     const transaction = db.transaction(() => {
-      // In a real system, we'd probably soft delete or cascade appropriately.
-      // But we will delete everything linked to this restaurant.
+      // Delete child records first to maintain data integrity
+      db.prepare('DELETE FROM order_logs WHERE order_id IN (SELECT id FROM orders WHERE restaurant_id = ?)').run(restaurant_id);
       db.prepare('DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE restaurant_id = ?)').run(restaurant_id);
+      db.prepare('DELETE FROM waiter_calls WHERE restaurant_id = ?').run(restaurant_id);
       db.prepare('DELETE FROM orders WHERE restaurant_id = ?').run(restaurant_id);
       db.prepare('DELETE FROM menu_items WHERE category_id IN (SELECT id FROM menu_categories WHERE restaurant_id = ?)').run(restaurant_id);
       db.prepare('DELETE FROM menu_categories WHERE restaurant_id = ?').run(restaurant_id);
       db.prepare('DELETE FROM tables WHERE restaurant_id = ?').run(restaurant_id);
+      db.prepare('DELETE FROM user_logins WHERE user_id IN (SELECT id FROM users WHERE restaurant_id = ? AND role != \'admin\')').run(restaurant_id);
       db.prepare('DELETE FROM users WHERE restaurant_id = ? AND role != \'admin\'').run(restaurant_id);
-      db.prepare('DELETE FROM waitlist WHERE restaurant_id = ?').run(restaurant_id);
       const result = db.prepare('DELETE FROM restaurants WHERE id = ?').run(restaurant_id);
       return result;
     });
@@ -1816,6 +1926,23 @@ app.post('/api/orders', (req, res) => {
     
     // Notify restaurant via WebSocket
     io.to(`restaurant_${restaurant_id}`).emit('new_order', { order: newOrder, items: newOrderItems });
+    
+    if (newOrder.customer_email) {
+      const parsedItems = newOrderItems as any[];
+      const itemsList = parsedItems.map(i => `<li>${i.quantity}x ${i.name} - ₦${i.price}</li>`).join('');
+      const emailHtml = `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 10px;">
+        <h2 style="color: #333;">Order Received</h2>
+        <p style="font-size: 16px; color: #555;">Hello ${newOrder.customer_name || 'Valued Customer'},</p>
+        <p style="font-size: 16px; color: #555;">Thank you for your order! Your order <strong>#${newOrder.order_number}</strong> has been received and is being processed.</p>
+        <h3>Order Details:</h3>
+        <ul>${itemsList}</ul>
+        <p><strong>Total: ₦${newOrder.total_amount}</strong></p>
+        <p style="font-size: 14px; color: #999; margin-top: 20px;">We will notify you when your order status updates.</p>
+      </div>
+      `;
+      sendPlatformEmail(newOrder.customer_email, `Order Confirmation: #${newOrder.order_number}`, emailHtml);
+    }
     
     res.json({ success: true, orderId, orderNumber: order_number });
   } catch (error) {
@@ -2218,27 +2345,15 @@ app.patch('/api/orders/:id/status', authenticateToken, (req, res) => {
   io.to(`restaurant_${updatedOrder.restaurant_id}`).emit('order_status_update', { orderId, status });
   
   if (updatedOrder.customer_email) {
-    if (resend) {
-      resend.emails.send({
-        from: 'QuickDine <onboarding@resend.dev>',
-        to: updatedOrder.customer_email,
-        subject: `Order Update: #${updatedOrder.order_number || updatedOrder.id}`,
-        html: `
-          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 10px;">
-            <h2 style="color: #333;">Order Status Update</h2>
-            <p style="font-size: 16px; color: #555;">Hello,</p>
-            <p style="font-size: 16px; color: #555;">Your order <strong>#${updatedOrder.order_number || updatedOrder.id}</strong> is now <strong>${status}</strong>.</p>
-            <p style="font-size: 16px; color: #555;">Thank you for using QuickDine!</p>
-          </div>
-        `
-      }).then(() => {
-        console.log(`[EMAIL SENT] Successfully sent status update to ${order.customer_email}`);
-      }).catch(err => {
-        console.error(`[EMAIL ERROR] Failed to send email to ${order.customer_email}:`, err);
-      });
-    } else {
-      console.log(`[EMAIL MOCK] Sending status update to ${order.customer_email}: Order ${order.order_number || order.id} is now ${status}`);
-    }
+    const emailHtml = `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 10px;">
+        <h2 style="color: #333;">Order Status Update</h2>
+        <p style="font-size: 16px; color: #555;">Hello,</p>
+        <p style="font-size: 16px; color: #555;">Your order <strong>#${updatedOrder.order_number || updatedOrder.id}</strong> is now <strong>${status}</strong>.</p>
+        <p style="font-size: 16px; color: #555;">Thank you for using QuickDine!</p>
+      </div>
+    `;
+    sendPlatformEmail(updatedOrder.customer_email, `Order Update: #${updatedOrder.order_number || updatedOrder.id}`, emailHtml);
   }
   
   res.json({ success: true, status });

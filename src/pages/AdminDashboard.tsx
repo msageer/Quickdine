@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Users, Store, Activity, Settings, PlusCircle, CheckCircle, XCircle, Info, Mail, Calendar, X, ClipboardList, User, TrendingUp, DollarSign, ShoppingBag, CheckCircle2, AlertCircle, CreditCard, LogIn, BellRing, UserPlus, Download, Plus, Receipt, BarChart3, LogOut } from 'lucide-react';
+import { Users, Store, Activity, Settings, PlusCircle, CheckCircle, XCircle, Info, Mail, Calendar, X, ClipboardList, User, TrendingUp, DollarSign, ShoppingBag, CheckCircle2, AlertCircle, CreditCard, LogIn, BellRing, UserPlus, Download, Plus, Receipt, BarChart3, LogOut, Key } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, Legend } from 'recharts';
 import { fetchWithRetry, apiFetch } from '../lib/utils';
 
@@ -33,6 +33,43 @@ export default function AdminDashboard() {
   const [newUser, setNewUser] = useState<any>({ email: '', password: '', role: 'admin', name: '', restaurant_id: '' });
   const [analyticsStartDate, setAnalyticsStartDate] = useState('');
   const [analyticsEndDate, setAnalyticsEndDate] = useState('');
+  
+  const [isAddRestaurantModalOpen, setIsAddRestaurantModalOpen] = useState(false);
+  const [newRestaurant, setNewRestaurant] = useState({ name: '', owner_email: '', owner_password: '', business_type: 'restaurant' });
+  const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState(false);
+  const [resetPasswordData, setResetPasswordData] = useState({ restaurant_id: '', new_password: '' });
+
+  const handleAddRestaurant = async () => {
+    try {
+      const res = await fetchWithRetry('/api/admin/restaurants', {
+        method: 'POST',
+        body: JSON.stringify(newRestaurant),
+      });
+      if (res.error) throw new Error(res.error);
+      setIsAddRestaurantModalOpen(false);
+      setNewRestaurant({ name: '', owner_email: '', owner_password: '', business_type: 'restaurant' });
+      fetchData(); // Make sure to refetch restaurants
+    } catch (err: any) {
+      console.error('Add restaurant error: ', err);
+      alert(err.message || 'Failed to add restaurant');
+    }
+  };
+
+  const handleResetPassword = async () => {
+    try {
+      const res = await fetchWithRetry(`/api/admin/restaurants/${resetPasswordData.restaurant_id}/reset-password`, {
+        method: 'POST',
+        body: JSON.stringify({ new_password: resetPasswordData.new_password }),
+      });
+      if (res.error) throw new Error(res.error);
+      setIsResetPasswordModalOpen(false);
+      setResetPasswordData({ restaurant_id: '', new_password: '' });
+      alert('Password reset successfully');
+    } catch (err: any) {
+      console.error('Reset password error: ', err);
+      alert(err.message || 'Failed to reset password');
+    }
+  };
 
   const getCurrencySymbol = (currencyCode: string) => {
     switch (currencyCode) {
@@ -475,7 +512,10 @@ export default function AdminDashboard() {
                   <h1 className="text-2xl font-bold text-ink-900 font-serif">Restaurants</h1>
                   <p className="text-ink-500 text-sm mt-1">Manage all restaurant partners on the platform.</p>
                 </div>
-                <button className="bg-brand-600 text-white px-5 py-2.5 rounded-xl font-medium hover:bg-brand-700 transition-colors flex items-center shadow-sm shadow-brand-500/20">
+                <button 
+                  onClick={() => setIsAddRestaurantModalOpen(true)}
+                  className="bg-brand-600 text-white px-5 py-2.5 rounded-xl font-medium hover:bg-brand-700 transition-colors flex items-center shadow-sm shadow-brand-500/20"
+                >
                   <PlusCircle className="w-5 h-5 mr-2" />
                   Add Restaurant
                 </button>
@@ -629,6 +669,16 @@ export default function AdminDashboard() {
                                 title="Delete Restaurant"
                               >
                                 <X className="w-4 h-4" />
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  setResetPasswordData({ restaurant_id: restaurant.id, new_password: '' });
+                                  setIsResetPasswordModalOpen(true);
+                                }}
+                                className="text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg transition-colors flex items-center"
+                                title="Reset Password"
+                              >
+                                <Key className="w-4 h-4 mr-1" /> Auth
                               </button>
                               <a href={`/restaurant/${restaurant.id}`} className="text-ink-600 hover:text-ink-900 bg-ink-100 hover:bg-ink-200 px-3 py-1.5 rounded-lg transition-colors">Dashboard</a>
                             </div>
@@ -2193,6 +2243,86 @@ export default function AdminDashboard() {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Add Restaurant Modal */}
+      <AnimatePresence>
+        {isAddRestaurantModalOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-ink-900/50 backdrop-blur-sm overflow-y-auto">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden mt-10 md:mt-0"
+            >
+              <div className="bg-brand-500 p-6 text-white flex justify-between items-center">
+                <h3 className="text-xl font-bold font-serif shadow-sm">Add New Restaurant</h3>
+                <button onClick={() => setIsAddRestaurantModalOpen(false)} className="text-white/80 hover:text-white transition-colors">
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-bold text-ink-900 mb-1">Restaurant Name</label>
+                  <input type="text" value={newRestaurant.name} onChange={e => setNewRestaurant({...newRestaurant, name: e.target.value})} className="w-full bg-ink-50 border border-ink-200 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500" placeholder="e.g. The Great Burger" />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-ink-900 mb-1">Owner Email</label>
+                  <input type="email" value={newRestaurant.owner_email} onChange={e => setNewRestaurant({...newRestaurant, owner_email: e.target.value})} className="w-full bg-ink-50 border border-ink-200 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500" placeholder="owner@example.com" />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-ink-900 mb-1">Owner Password</label>
+                  <input type="text" value={newRestaurant.owner_password} onChange={e => setNewRestaurant({...newRestaurant, owner_password: e.target.value})} className="w-full bg-ink-50 border border-ink-200 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500" placeholder="Required for first login" />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-ink-900 mb-1">Business Type</label>
+                  <select value={newRestaurant.business_type} onChange={e => setNewRestaurant({...newRestaurant, business_type: e.target.value})} className="w-full bg-ink-50 border border-ink-200 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-brand-500">
+                    <option value="restaurant">Restaurant</option>
+                    <option value="hotel_room_service">Hotel Room Service</option>
+                  </select>
+                </div>
+                
+                <div className="pt-4 flex justify-end gap-3 border-t border-ink-100">
+                  <button onClick={() => setIsAddRestaurantModalOpen(false)} className="px-4 py-2 text-ink-600 font-bold hover:bg-ink-100 rounded-xl transition-colors">Cancel</button>
+                  <button onClick={handleAddRestaurant} className="px-6 py-2 bg-brand-500 text-white font-bold rounded-xl hover:bg-brand-600 transition-colors shadow-sm">Add Restaurant</button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Reset Password Modal */}
+      <AnimatePresence>
+        {isResetPasswordModalOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-ink-900/50 backdrop-blur-sm overflow-y-auto">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden mt-10 md:mt-0"
+            >
+              <div className="bg-amber-500 p-5 text-white flex justify-between items-center">
+                <h3 className="text-lg font-bold font-serif shadow-sm">Reset Owner Password</h3>
+                <button onClick={() => setIsResetPasswordModalOpen(false)} className="text-white/80 hover:text-white transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-bold text-ink-900 mb-1">New Password</label>
+                  <input type="text" value={resetPasswordData.new_password} onChange={e => setResetPasswordData({...resetPasswordData, new_password: e.target.value})} className="w-full bg-ink-50 border border-ink-200 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500" placeholder="Enter new password" />
+                </div>
+                <div className="pt-4 flex justify-end gap-3 border-t border-ink-100">
+                  <button onClick={() => setIsResetPasswordModalOpen(false)} className="px-4 py-2 text-ink-600 font-bold hover:bg-ink-100 rounded-xl transition-colors">Cancel</button>
+                  <button onClick={handleResetPassword} className="px-6 py-2 bg-amber-500 text-white font-bold rounded-xl hover:bg-amber-600 transition-colors shadow-sm">Reset</button>
+                </div>
+              </div>
             </motion.div>
           </div>
         )}
