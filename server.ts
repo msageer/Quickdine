@@ -1915,7 +1915,7 @@ app.post('/api/orders', (req, res) => {
       FROM orders o 
       LEFT JOIN tables t ON o.table_id = t.id 
       WHERE o.id = ?
-    `).get(orderId);
+    `).get(orderId) as any;
     
     const newOrderItems = db.prepare(`
       SELECT oi.*, m.name 

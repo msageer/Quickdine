@@ -43,12 +43,15 @@ export default function AdminDashboard() {
     try {
       const res = await fetchWithRetry('/api/admin/restaurants', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newRestaurant),
       });
-      if (res.error) throw new Error(res.error);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to add restaurant');
       setIsAddRestaurantModalOpen(false);
       setNewRestaurant({ name: '', owner_email: '', owner_password: '', business_type: 'restaurant' });
-      fetchData(); // Make sure to refetch restaurants
+      const [resRestaurants] = await Promise.allSettled([fetchWithRetry('/api/restaurants')]);
+      if (resRestaurants.status === 'fulfilled' && resRestaurants.value.ok) setRestaurants(await resRestaurants.value.json());
     } catch (err: any) {
       console.error('Add restaurant error: ', err);
       alert(err.message || 'Failed to add restaurant');
@@ -59,9 +62,11 @@ export default function AdminDashboard() {
     try {
       const res = await fetchWithRetry(`/api/admin/restaurants/${resetPasswordData.restaurant_id}/reset-password`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ new_password: resetPasswordData.new_password }),
       });
-      if (res.error) throw new Error(res.error);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to reset password');
       setIsResetPasswordModalOpen(false);
       setResetPasswordData({ restaurant_id: '', new_password: '' });
       alert('Password reset successfully');
