@@ -1,7 +1,8 @@
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import Database from 'better-sqlite3';
+import OriginalDatabase from 'better-sqlite3';
+import LibSqlDatabase from '@libsql/sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { Resend } from 'resend';
@@ -135,6 +136,8 @@ const io = new Server(httpServer, {
 
 const PORT = 3000;
 
+const Database: any = process.env.TURSO_DATABASE_URL ? LibSqlDatabase : OriginalDatabase;
+
 // Database setup
 let dbPath = 'quickdine.db';
 
@@ -156,7 +159,22 @@ if (process.env.VERCEL) {
   }
 }
 
-const db = new Database(dbPath);
+let db: any;
+if (process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN) {
+  console.log('Using Turso LibSQL remote sync');
+  db = new Database(dbPath, {
+    syncUrl: process.env.TURSO_DATABASE_URL,
+    authToken: process.env.TURSO_AUTH_TOKEN
+  });
+  db.sync();
+  // Auto-sync periodically in background
+  setInterval(() => {
+    try { db.sync(); } catch(e) { console.error('Turso sync error', e); }
+  }, 5000);
+} else {
+  db = new Database(dbPath);
+}
+
 db.pragma('journal_mode = WAL');
 
 // Initialize DB schema
