@@ -100,8 +100,12 @@ export const db = {
       if (q.trim()) {
         try {
           await pool.query(q);
-        } catch (e) {
-          console.error("DB Exec Error", e, q);
+        } catch (e: any) {
+          if (e && e.message && e.message.includes('already exists')) {
+            // Ignore benign already exists errors
+          } else {
+            console.error("DB Exec Error", e instanceof Error ? e.message : e, q);
+          }
         }
       }
     }
