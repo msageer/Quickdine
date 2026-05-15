@@ -136,7 +136,10 @@ const PORT = 3000;
 
 import { db } from './src/db.js';
 
-async function initializeDatabaseAndRoutes() {
+let isInitialized = false;
+let initPromise: Promise<void> | null = null;
+
+async function initializeDatabase() {
 // Initialize DB schema
 await db.exec(`
   CREATE TABLE IF NOT EXISTS restaurants (
@@ -515,7 +518,16 @@ const count = await db.get('SELECT COUNT(*) as count FROM restaurants') as { cou
 if (count.count === 0) {
   // Empty db handler can remain but demo is handled above
 }
+} // close initializeDatabase
 
+app.use(async (req, res, next) => {
+  if (!isInitialized) {
+    if (!initPromise) initPromise = initializeDatabase();
+    await initPromise;
+    isInitialized = true;
+  }
+  next();
+});
 
 app.use(express.json());
 
@@ -2432,10 +2444,8 @@ io.on('connection', (socket) => {
   });
 });
 
-}
-
 async function startServer() {
-  await initializeDatabaseAndRoutes();
+  await initializeDatabase();
   app.use('/uploads', express.static(path.join(rootDir, 'uploads')));
 
   if (process.env.NODE_ENV !== 'production') {
@@ -2466,20 +2476,8 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   res.status(500).json({ error: err.message || 'Internal Server Error' });
 });
 
-let isInitialized = false;
-let initPromise: Promise<void> | null = null;
-
 if (!process.env.VERCEL) {
   startServer();
 }
 
-export default async function handler(req: express.Request, res: express.Response) {
-  if (!isInitialized) {
-    if (!initPromise) {
-      initPromise = initializeDatabaseAndRoutes();
-    }
-    await initPromise;
-    isInitialized = true;
-  }
-  return app(req, res);
-}
+export default app;
