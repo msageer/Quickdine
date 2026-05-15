@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
 import path from 'path';
 
-let connectionString = process.env.DATABASE_URL;
+let connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
 if (connectionString) {
   const lastAt = connectionString.lastIndexOf('@');
   if (lastAt !== -1) {
@@ -10,11 +10,7 @@ if (connectionString) {
     const firstColon = authPart.indexOf(':');
     if (firstColon !== -1) {
       const username = authPart.substring(0, firstColon);
-      // Only encode if it's not already encoded (simple heuristic: contains # or special chars that break URL)
-      // Actually, safest is to decode and then encode, or just encodeURIComponent if it contains #
       const password = authPart.substring(firstColon + 1);
-      // To avoid double encoding, we check if it already seems encoded, 
-      // but if it contains '#' it threw an error, so decodeURIComponent first to be safe, then encode
       let decodedPassword = password;
       try { decodedPassword = decodeURIComponent(password); } catch(e) {}
       connectionString = connectionString.substring(0, protocolEnd) + username + ':' + encodeURIComponent(decodedPassword) + connectionString.substring(lastAt);
@@ -25,6 +21,7 @@ if (connectionString) {
 const pool = new Pool({
   connectionString
 });
+
 
 function convertQuery(sql: string, params: any[]): [string, any[]] {
   let newSql = sql;

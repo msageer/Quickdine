@@ -1,8 +1,6 @@
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import OriginalDatabase from 'better-sqlite3';
-import LibSqlDatabase from '@libsql/sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { Resend } from 'resend';
@@ -2468,6 +2466,20 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   res.status(500).json({ error: err.message || 'Internal Server Error' });
 });
 
-startServer();
+let isInitialized = false;
+let initPromise: Promise<void> | null = null;
 
-export default app;
+if (!process.env.VERCEL) {
+  startServer();
+}
+
+export default async function handler(req: express.Request, res: express.Response) {
+  if (!isInitialized) {
+    if (!initPromise) {
+      initPromise = initializeDatabaseAndRoutes();
+    }
+    await initPromise;
+    isInitialized = true;
+  }
+  return app(req, res);
+}
