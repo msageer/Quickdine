@@ -136,49 +136,11 @@ const io = new Server(httpServer, {
 
 const PORT = 3000;
 
-const Database: any = process.env.TURSO_DATABASE_URL ? LibSqlDatabase : OriginalDatabase;
+import { db } from './src/db.js';
 
-// Database setup
-let dbPath = 'quickdine.db';
-
-if (process.env.VERCEL) {
-  dbPath = path.join('/tmp', 'quickdine.db');
-  let sourceDbPath = path.join(rootDir, 'quickdine.db');
-  if (!fs.existsSync(sourceDbPath)) {
-    sourceDbPath = path.join(process.cwd(), 'quickdine.db');
-  }
-  if (fs.existsSync(sourceDbPath) && !fs.existsSync(dbPath)) {
-    try {
-      fs.copyFileSync(sourceDbPath, dbPath);
-      if (fs.existsSync(sourceDbPath + '-wal')) fs.copyFileSync(sourceDbPath + '-wal', dbPath + '-wal');
-      if (fs.existsSync(sourceDbPath + '-shm')) fs.copyFileSync(sourceDbPath + '-shm', dbPath + '-shm');
-      console.log('Copied quickdine.db to /tmp for Vercel');
-    } catch (e) {
-      console.error('Failed to copy db to /tmp', e);
-    }
-  }
-}
-
-let db: any;
-if (process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN) {
-  console.log('Using Turso LibSQL remote sync');
-  db = new Database(dbPath, {
-    syncUrl: process.env.TURSO_DATABASE_URL,
-    authToken: process.env.TURSO_AUTH_TOKEN
-  });
-  db.sync();
-  // Auto-sync periodically in background
-  setInterval(() => {
-    try { db.sync(); } catch(e) { console.error('Turso sync error', e); }
-  }, 5000);
-} else {
-  db = new Database(dbPath);
-}
-
-db.pragma('journal_mode = WAL');
-
+async function initializeDatabaseAndRoutes() {
 // Initialize DB schema
-db.exec(`
+await db.exec(`
   CREATE TABLE IF NOT EXISTS restaurants (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -286,86 +248,86 @@ db.exec(`
 
 // Seed initial data if empty
 try {
-  db.exec("ALTER TABLE restaurants ADD COLUMN status TEXT DEFAULT 'Pending'");
+  await db.exec("ALTER TABLE restaurants ADD COLUMN status TEXT DEFAULT 'Pending'");
 } catch (e) {
   // Column might already exist
 }
 
-try { db.exec("ALTER TABLE orders ADD COLUMN customer_email TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE orders ADD COLUMN customer_name TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE orders ADD COLUMN customer_address TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE orders ADD COLUMN special_instructions TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE orders ADD COLUMN order_number TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN waiter_allocation_enabled INTEGER DEFAULT 0"); } catch (e) {}
-try { db.exec("ALTER TABLE orders ADD COLUMN waiter_id INTEGER REFERENCES users(id)"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN logo_url TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN description TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN address TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN phone TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN email TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN currency TEXT DEFAULT 'USD'"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN tax_rate REAL DEFAULT 0.0"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN payment_cash_enabled INTEGER DEFAULT 1"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN payment_paystack_enabled INTEGER DEFAULT 0"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN paystack_public_key TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN paystack_secret_key TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN operating_hours TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE orders ADD COLUMN customer_email TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE orders ADD COLUMN customer_name TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE orders ADD COLUMN customer_address TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE orders ADD COLUMN special_instructions TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE orders ADD COLUMN order_number TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN waiter_allocation_enabled INTEGER DEFAULT 0"); } catch (e) {}
+try { await db.exec("ALTER TABLE orders ADD COLUMN waiter_id INTEGER REFERENCES users(id)"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN logo_url TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN description TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN address TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN phone TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN email TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN currency TEXT DEFAULT 'USD'"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN tax_rate REAL DEFAULT 0.0"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN payment_cash_enabled INTEGER DEFAULT 1"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN payment_paystack_enabled INTEGER DEFAULT 0"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN paystack_public_key TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN paystack_secret_key TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN operating_hours TEXT"); } catch (e) {}
 
-try { db.exec("ALTER TABLE platform_settings ADD COLUMN payment_paystack_enabled INTEGER DEFAULT 0"); } catch (e) {}
-try { db.exec("ALTER TABLE platform_settings ADD COLUMN paystack_public_key TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE platform_settings ADD COLUMN paystack_secret_key TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE platform_settings ADD COLUMN payment_monnify_enabled INTEGER DEFAULT 0"); } catch (e) {}
-try { db.exec("ALTER TABLE platform_settings ADD COLUMN monnify_api_key TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE platform_settings ADD COLUMN monnify_secret_key TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE platform_settings ADD COLUMN monnify_contract_code TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE platform_settings ADD COLUMN payment_flutterwave_enabled INTEGER DEFAULT 0"); } catch (e) {}
-try { db.exec("ALTER TABLE platform_settings ADD COLUMN flutterwave_public_key TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE platform_settings ADD COLUMN flutterwave_secret_key TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE platform_settings ADD COLUMN payment_paystack_enabled INTEGER DEFAULT 0"); } catch (e) {}
+try { await db.exec("ALTER TABLE platform_settings ADD COLUMN paystack_public_key TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE platform_settings ADD COLUMN paystack_secret_key TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE platform_settings ADD COLUMN payment_monnify_enabled INTEGER DEFAULT 0"); } catch (e) {}
+try { await db.exec("ALTER TABLE platform_settings ADD COLUMN monnify_api_key TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE platform_settings ADD COLUMN monnify_secret_key TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE platform_settings ADD COLUMN monnify_contract_code TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE platform_settings ADD COLUMN payment_flutterwave_enabled INTEGER DEFAULT 0"); } catch (e) {}
+try { await db.exec("ALTER TABLE platform_settings ADD COLUMN flutterwave_public_key TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE platform_settings ADD COLUMN flutterwave_secret_key TEXT"); } catch (e) {}
 
-try { db.exec("ALTER TABLE restaurants ADD COLUMN account_number TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN bank_name TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN account_name TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN account_verified INTEGER DEFAULT 0"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN payment_monnify_enabled INTEGER DEFAULT 0"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN slug TEXT UNIQUE"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN account_number TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN bank_name TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN account_name TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN account_verified INTEGER DEFAULT 0"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN payment_monnify_enabled INTEGER DEFAULT 0"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN slug TEXT UNIQUE"); } catch (e) {}
 
 // Backfill slugs
 try {
-  const restaurants = db.prepare("SELECT id, name FROM restaurants WHERE slug IS NULL").all() as any[];
+  const restaurants = await db.all("SELECT id, name FROM restaurants WHERE slug IS NULL") as any[];
   const updateSlug = db.prepare("UPDATE restaurants SET slug = ? WHERE id = ?");
-  restaurants.forEach(r => {
+  for (const r of restaurants) {
     const slug = r.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + r.id;
-    updateSlug.run(slug, r.id);
-  });
+    await updateSlug.run(slug, r.id);
+  }
 } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN monnify_api_key TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN monnify_secret_key TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN monnify_contract_code TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN payment_flutterwave_enabled INTEGER DEFAULT 0"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN flutterwave_public_key TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN flutterwave_secret_key TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN monnify_api_key TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN monnify_secret_key TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN monnify_contract_code TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN payment_flutterwave_enabled INTEGER DEFAULT 0"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN flutterwave_public_key TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN flutterwave_secret_key TEXT"); } catch (e) {}
 
-try { db.exec("ALTER TABLE tables ADD COLUMN address TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE tables ADD COLUMN is_room INTEGER DEFAULT 0"); } catch (e) {}
+try { await db.exec("ALTER TABLE tables ADD COLUMN address TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE tables ADD COLUMN is_room INTEGER DEFAULT 0"); } catch (e) {}
 
-try { db.exec("ALTER TABLE users ADD COLUMN name TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE orders ADD COLUMN payment_method TEXT DEFAULT 'Cash'"); } catch (e) {}
-try { db.exec("ALTER TABLE orders ADD COLUMN payment_status TEXT DEFAULT 'Pending'"); } catch (e) {}
-try { db.exec("ALTER TABLE orders ADD COLUMN paystack_reference TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE orders ADD COLUMN monnify_reference TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE orders ADD COLUMN flutterwave_reference TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE users ADD COLUMN name TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE orders ADD COLUMN payment_method TEXT DEFAULT 'Cash'"); } catch (e) {}
+try { await db.exec("ALTER TABLE orders ADD COLUMN payment_status TEXT DEFAULT 'Pending'"); } catch (e) {}
+try { await db.exec("ALTER TABLE orders ADD COLUMN paystack_reference TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE orders ADD COLUMN monnify_reference TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE orders ADD COLUMN flutterwave_reference TEXT"); } catch (e) {}
 
-try { db.exec("ALTER TABLE restaurants ADD COLUMN business_type TEXT DEFAULT 'restaurant'"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN business_type TEXT DEFAULT 'restaurant'"); } catch (e) {}
 
-try { db.exec("ALTER TABLE orders ADD COLUMN tip_amount REAL DEFAULT 0.0"); } catch (e) {}
-try { db.exec("ALTER TABLE menu_items ADD COLUMN dietary_badges TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE menu_items ADD COLUMN modifiers TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE order_items ADD COLUMN notes TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE order_items ADD COLUMN modifiers TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE orders ADD COLUMN tip_amount REAL DEFAULT 0.0"); } catch (e) {}
+try { await db.exec("ALTER TABLE menu_items ADD COLUMN dietary_badges TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE menu_items ADD COLUMN modifiers TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE order_items ADD COLUMN notes TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE order_items ADD COLUMN modifiers TEXT"); } catch (e) {}
 
 // --- NEW SCHEMA UPDATES FOR TIER ENGINE & TAX READINESS ---
 try { 
-  db.exec(`CREATE TABLE IF NOT EXISTS subscription_plans (
+  await db.exec(`CREATE TABLE IF NOT EXISTS subscription_plans (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     plan_name TEXT NOT NULL,
     price_monthly REAL NOT NULL,
@@ -379,23 +341,23 @@ try {
   )`); 
 } catch (e) {}
 
-try { db.exec("ALTER TABLE subscription_plans ADD COLUMN can_use_online_payments INTEGER DEFAULT 0"); } catch (e) {}
+try { await db.exec("ALTER TABLE subscription_plans ADD COLUMN can_use_online_payments INTEGER DEFAULT 0"); } catch (e) {}
 
-try { db.exec("ALTER TABLE restaurants ADD COLUMN tin_number TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN is_hotel INTEGER DEFAULT 0"); } catch (e) {}
-try { db.exec("ALTER TABLE menu_items ADD COLUMN cogs REAL DEFAULT 0.0"); } catch (e) {}
-try { db.exec("ALTER TABLE orders ADD COLUMN subtotal REAL DEFAULT 0.0"); } catch (e) {}
-try { db.exec("ALTER TABLE orders ADD COLUMN vat_amount REAL DEFAULT 0.0"); } catch (e) {}
-try { db.exec("ALTER TABLE orders ADD COLUMN state_tax_amount REAL DEFAULT 0.0"); } catch (e) {}
-try { db.exec("ALTER TABLE orders ADD COLUMN service_charge REAL DEFAULT 0.0"); } catch (e) {}
-try { db.exec("ALTER TABLE orders ADD COLUMN net_total REAL DEFAULT 0.0"); } catch (e) {}
-try { db.exec("ALTER TABLE orders ADD COLUMN payment_method TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE orders ADD COLUMN guest_last_name TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE orders ADD COLUMN room_number TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE subscription_plans ADD COLUMN max_monthly_gmv REAL DEFAULT 0.0"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN tin_number TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN is_hotel INTEGER DEFAULT 0"); } catch (e) {}
+try { await db.exec("ALTER TABLE menu_items ADD COLUMN cogs REAL DEFAULT 0.0"); } catch (e) {}
+try { await db.exec("ALTER TABLE orders ADD COLUMN subtotal REAL DEFAULT 0.0"); } catch (e) {}
+try { await db.exec("ALTER TABLE orders ADD COLUMN vat_amount REAL DEFAULT 0.0"); } catch (e) {}
+try { await db.exec("ALTER TABLE orders ADD COLUMN state_tax_amount REAL DEFAULT 0.0"); } catch (e) {}
+try { await db.exec("ALTER TABLE orders ADD COLUMN service_charge REAL DEFAULT 0.0"); } catch (e) {}
+try { await db.exec("ALTER TABLE orders ADD COLUMN net_total REAL DEFAULT 0.0"); } catch (e) {}
+try { await db.exec("ALTER TABLE orders ADD COLUMN payment_method TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE orders ADD COLUMN guest_last_name TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE orders ADD COLUMN room_number TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE subscription_plans ADD COLUMN max_monthly_gmv REAL DEFAULT 0.0"); } catch (e) {}
 
 try {
-  db.exec(`CREATE TABLE IF NOT EXISTS order_logs (
+  await db.exec(`CREATE TABLE IF NOT EXISTS order_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     order_id INTEGER NOT NULL,
     staff_id INTEGER,
@@ -408,41 +370,41 @@ try {
     FOREIGN KEY(staff_id) REFERENCES users(id)
   )`);
 } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN subscription_plan_id INTEGER DEFAULT 1"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN subscription_status TEXT DEFAULT 'Active'"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN subscription_billing_cycle TEXT DEFAULT 'monthly'"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN subscription_expiry_date TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN vat_rate REAL DEFAULT 0"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN state_tax_rate REAL DEFAULT 0"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN is_tax_inclusive INTEGER DEFAULT 0"); } catch (e) {}
-try { db.exec("ALTER TABLE restaurants ADD COLUMN receipt_footer TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN subscription_plan_id INTEGER DEFAULT 1"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN subscription_status TEXT DEFAULT 'Active'"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN subscription_billing_cycle TEXT DEFAULT 'monthly'"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN subscription_expiry_date TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN vat_rate REAL DEFAULT 0"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN state_tax_rate REAL DEFAULT 0"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN is_tax_inclusive INTEGER DEFAULT 0"); } catch (e) {}
+try { await db.exec("ALTER TABLE restaurants ADD COLUMN receipt_footer TEXT"); } catch (e) {}
 
-try { db.exec("ALTER TABLE orders ADD COLUMN gross_total REAL DEFAULT 0"); } catch (e) {}
-try { db.exec("ALTER TABLE orders ADD COLUMN net_total REAL DEFAULT 0"); } catch (e) {}
-try { db.exec("ALTER TABLE orders ADD COLUMN vat_amount REAL DEFAULT 0"); } catch (e) {}
-try { db.exec("ALTER TABLE orders ADD COLUMN state_tax_amount REAL DEFAULT 0"); } catch (e) {}
-try { db.exec("ALTER TABLE orders ADD COLUMN discount_amount REAL DEFAULT 0"); } catch (e) {}
-try { db.exec("ALTER TABLE orders ADD COLUMN discount_reason TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE orders ADD COLUMN gross_total REAL DEFAULT 0"); } catch (e) {}
+try { await db.exec("ALTER TABLE orders ADD COLUMN net_total REAL DEFAULT 0"); } catch (e) {}
+try { await db.exec("ALTER TABLE orders ADD COLUMN vat_amount REAL DEFAULT 0"); } catch (e) {}
+try { await db.exec("ALTER TABLE orders ADD COLUMN state_tax_amount REAL DEFAULT 0"); } catch (e) {}
+try { await db.exec("ALTER TABLE orders ADD COLUMN discount_amount REAL DEFAULT 0"); } catch (e) {}
+try { await db.exec("ALTER TABLE orders ADD COLUMN discount_reason TEXT"); } catch (e) {}
 // payment_method already exists, but we can ensure it supports POS_Transfer in logic
 
-try { db.exec("ALTER TABLE users ADD COLUMN phone_number TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE users ADD COLUMN pin TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0"); } catch (e) {}
-try { db.exec("ALTER TABLE users ADD COLUMN phone_verified INTEGER DEFAULT 0"); } catch (e) {}
-try { db.exec("ALTER TABLE users ADD COLUMN otp_code TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE users ADD COLUMN otp_expires_at DATETIME"); } catch (e) {}
-try { db.exec("ALTER TABLE users ADD COLUMN verification_token TEXT"); } catch (e) {}
-try { db.exec("ALTER TABLE users ADD COLUMN verification_expires DATETIME"); } catch (e) {}
-try { db.exec("ALTER TABLE platform_settings ADD COLUMN global_copyright_footer TEXT DEFAULT 'Powered by QuickDine'"); } catch (e) {}
-try { db.exec("ALTER TABLE platform_settings ADD COLUMN simulate_order_enabled INTEGER DEFAULT 0"); } catch (e) {}
+try { await db.exec("ALTER TABLE users ADD COLUMN phone_number TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE users ADD COLUMN pin TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0"); } catch (e) {}
+try { await db.exec("ALTER TABLE users ADD COLUMN phone_verified INTEGER DEFAULT 0"); } catch (e) {}
+try { await db.exec("ALTER TABLE users ADD COLUMN otp_code TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE users ADD COLUMN otp_expires_at DATETIME"); } catch (e) {}
+try { await db.exec("ALTER TABLE users ADD COLUMN verification_token TEXT"); } catch (e) {}
+try { await db.exec("ALTER TABLE users ADD COLUMN verification_expires DATETIME"); } catch (e) {}
+try { await db.exec("ALTER TABLE platform_settings ADD COLUMN global_copyright_footer TEXT DEFAULT 'Powered by QuickDine'"); } catch (e) {}
+try { await db.exec("ALTER TABLE platform_settings ADD COLUMN simulate_order_enabled INTEGER DEFAULT 0"); } catch (e) {}
 
 // Ensure super admin exists
 try {
-  const superAdmin = db.prepare('SELECT * FROM users WHERE email = ?').get('msagirgroup@gmail.com');
+  const superAdmin = await db.get('SELECT * FROM users WHERE email = ?', ['msagirgroup@gmail.com']);
   if (!superAdmin) {
-    db.prepare('INSERT INTO users (email, password, role, restaurant_id, email_verified) VALUES (?, ?, ?, ?, 1)').run('msagirgroup@gmail.com', 'admin1234', 'admin', null);
+    await db.run('INSERT INTO users (email, password, role, restaurant_id, email_verified) VALUES (?, ?, ?, ?, 1)', ['msagirgroup@gmail.com', 'admin1234', 'admin', null]);
   } else {
-    db.prepare("UPDATE users SET password = ?, role = 'admin', email_verified = 1 WHERE email = ?").run('admin1234', 'msagirgroup@gmail.com');
+    await db.run("UPDATE users SET password = ?, role = 'admin', email_verified = 1 WHERE email = ?", ['admin1234', 'msagirgroup@gmail.com']);
   }
 } catch (e) {
   console.error("Failed to seed super admin:", e);
@@ -450,33 +412,33 @@ try {
 
 // Seed default plans
 try {
-  const planCount = db.prepare("SELECT COUNT(*) as count FROM subscription_plans").get() as any;
+  const planCount = await db.get("SELECT COUNT(*) as count FROM subscription_plans") as any;
   if (planCount.count === 0) {
     const insertPlan = db.prepare("INSERT INTO subscription_plans (plan_name, price_monthly, price_annual, max_waiters, max_monthly_orders, analytics_retention_days, can_export_tax_reports, is_vip_featured, can_use_online_payments) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    insertPlan.run('Starter', 0, 0, 1, 100, 7, 0, 0, 0);
-    insertPlan.run('Professional', 15000, 150000, 10, 999999, 365, 1, 0, 1);
-    insertPlan.run('Enterprise', 35000, 350000, 999999, 999999, 365, 1, 1, 1);
+    await insertPlan.run('Starter', 0, 0, 1, 100, 7, 0, 0, 0);
+    await insertPlan.run('Professional', 15000, 150000, 10, 999999, 365, 1, 0, 1);
+    await insertPlan.run('Enterprise', 35000, 350000, 999999, 999999, 365, 1, 1, 1);
   } else {
     // Update existing plans to match new specs if they haven't been updated
-    db.prepare("UPDATE subscription_plans SET plan_name = 'Starter', max_waiters = 1, can_use_online_payments = 0 WHERE id = 1").run();
-    db.prepare("UPDATE subscription_plans SET plan_name = 'Professional', max_monthly_orders = 999999, can_use_online_payments = 1 WHERE id = 2").run();
-    db.prepare("UPDATE subscription_plans SET plan_name = 'Enterprise', max_waiters = 999999, can_use_online_payments = 1 WHERE id = 3").run();
+    await db.run("UPDATE subscription_plans SET plan_name = 'Starter', max_waiters = 1, can_use_online_payments = 0 WHERE id = 1");
+    await db.run("UPDATE subscription_plans SET plan_name = 'Professional', max_monthly_orders = 999999, can_use_online_payments = 1 WHERE id = 2");
+    await db.run("UPDATE subscription_plans SET plan_name = 'Enterprise', max_waiters = 999999, can_use_online_payments = 1 WHERE id = 3");
   }
 } catch (e) {}
 
 // Function to check and downgrade expired subscriptions
-const checkExpiredSubscriptions = () => {
+const checkExpiredSubscriptions = async () => {
   try {
     const now = new Date().toISOString();
-    const expiredRestaurants = db.prepare(`
+    const expiredRestaurants = await db.all(`
       SELECT id FROM restaurants 
       WHERE subscription_expiry_date IS NOT NULL 
       AND subscription_expiry_date < ? 
       AND subscription_status = 'Active'
-    `).all(now) as any[];
+    `, [now]) as any[];
 
     if (expiredRestaurants.length > 0) {
-      const starterPlan = db.prepare("SELECT id FROM subscription_plans WHERE plan_name = 'Starter' LIMIT 1").get() as any;
+      const starterPlan = await db.get("SELECT id FROM subscription_plans WHERE plan_name = 'Starter' LIMIT 1") as any;
       const starterPlanId = starterPlan ? starterPlan.id : 1;
 
       const updateStmt = db.prepare(`
@@ -485,9 +447,9 @@ const checkExpiredSubscriptions = () => {
         WHERE id = ?
       `);
 
-      const transaction = db.transaction((restaurants) => {
+      const transaction = db.transaction(async (restaurants) => {
         for (const r of restaurants) {
-          updateStmt.run(starterPlanId, r.id);
+          await updateStmt.run(starterPlanId, r.id);
         }
       });
 
@@ -506,52 +468,52 @@ checkExpiredSubscriptions();
 // ----------------------------------------------------------
 
 try {
-  const settingsCount = db.prepare('SELECT COUNT(*) as count FROM platform_settings').get() as { count: number };
+  const settingsCount = await db.get('SELECT COUNT(*) as count FROM platform_settings') as { count: number };
   if (settingsCount.count === 0) {
-    db.prepare('INSERT INTO platform_settings (default_currency, notifications_enabled) VALUES (?, ?)').run('USD', 1);
+    await db.run('INSERT INTO platform_settings (default_currency, notifications_enabled) VALUES (?, ?)', ['USD', 1]);
   }
 } catch (e) {}
 
 // Ensure Demo Restaurant and Users exist
 try {
-  let demoRes = db.prepare('SELECT * FROM restaurants WHERE name = ?').get('The Great Burger') as any;
+  let demoRes = await db.get('SELECT * FROM restaurants WHERE name = ?', ['The Great Burger']) as any;
   if (!demoRes) {
     const insertRestaurant = db.prepare("INSERT INTO restaurants (name, status) VALUES (?, 'Active')");
-    const resId = insertRestaurant.run('The Great Burger').lastInsertRowid;
+    const resId = (await insertRestaurant.run('The Great Burger')).lastInsertRowid;
     demoRes = { id: resId };
     
     const insertCategory = db.prepare('INSERT INTO menu_categories (restaurant_id, name) VALUES (?, ?)');
-    const catId = insertCategory.run(resId, 'Burgers').lastInsertRowid;
+    const catId = (await insertCategory.run(resId, 'Burgers')).lastInsertRowid;
     
     const insertItem = db.prepare('INSERT INTO menu_items (restaurant_id, category_id, name, description, price, status, prep_time) VALUES (?, ?, ?, ?, ?, ?, ?)');
-    insertItem.run(resId, catId, 'Classic Cheeseburger', 'Beef patty with cheese, lettuce, and tomato', 12.99, 'Available', 15);
-    insertItem.run(resId, catId, 'Double Bacon Burger', 'Two beef patties with bacon and cheese', 16.99, 'Available', 20);
+    await insertItem.run(resId, catId, 'Classic Cheeseburger', 'Beef patty with cheese, lettuce, and tomato', 12.99, 'Available', 15);
+    await insertItem.run(resId, catId, 'Double Bacon Burger', 'Two beef patties with bacon and cheese', 16.99, 'Available', 20);
     
     const insertTable = db.prepare('INSERT INTO tables (restaurant_id, table_number, qr_token) VALUES (?, ?, ?)');
-    insertTable.run(resId, '1', 'table-1-token-xyz');
-    insertTable.run(resId, '2', 'table-2-token-abc');
+    await insertTable.run(resId, '1', 'table-1-token-xyz');
+    await insertTable.run(resId, '2', 'table-2-token-abc');
   }
 
   const resId = demoRes.id;
 
-  const demoOwner = db.prepare('SELECT * FROM users WHERE email = ?').get('owner@greatburger.com');
+  const demoOwner = await db.get('SELECT * FROM users WHERE email = ?', ['owner@greatburger.com']);
   if (!demoOwner) {
-    db.prepare('INSERT INTO users (email, password, role, restaurant_id, email_verified) VALUES (?, ?, ?, ?, 1)').run('owner@greatburger.com', 'owner123', 'restaurant', resId);
+    await db.run('INSERT INTO users (email, password, role, restaurant_id, email_verified) VALUES (?, ?, ?, ?, 1)', ['owner@greatburger.com', 'owner123', 'restaurant', resId]);
   } else {
-    db.prepare("UPDATE users SET password = ?, restaurant_id = ? WHERE email = ?").run('owner123', resId, 'owner@greatburger.com');
+    await db.run("UPDATE users SET password = ?, restaurant_id = ? WHERE email = ?", ['owner123', resId, 'owner@greatburger.com']);
   }
 
-  const demoWaiter = db.prepare('SELECT * FROM users WHERE phone_number = ?').get('1234567890');
+  const demoWaiter = await db.get('SELECT * FROM users WHERE phone_number = ?', ['1234567890']);
   if (!demoWaiter) {
-    db.prepare("INSERT INTO users (name, email, password, phone_number, pin, role, restaurant_id, email_verified) VALUES (?, ?, ?, ?, ?, 'waiter', ?, 1)").run('Demo Waiter', 'waiter@greatburger.com', 'waiter123', '1234567890', '1234', resId);
+    await db.run("INSERT INTO users (name, email, password, phone_number, pin, role, restaurant_id, email_verified) VALUES (?, ?, ?, ?, ?, 'waiter', ?, 1)", ['Demo Waiter', 'waiter@greatburger.com', 'waiter123', '1234567890', '1234', resId]);
   } else {
-    db.prepare("UPDATE users SET pin = ?, restaurant_id = ? WHERE phone_number = ?").run('1234', resId, '1234567890');
+    await db.run("UPDATE users SET pin = ?, restaurant_id = ? WHERE phone_number = ?", ['1234', resId, '1234567890']);
   }
 } catch (e) {
   console.error("Failed to seed demo credentials:", e);
 }
 
-const count = db.prepare('SELECT COUNT(*) as count FROM restaurants').get() as { count: number };
+const count = await db.get('SELECT COUNT(*) as count FROM restaurants') as { count: number };
 if (count.count === 0) {
   // Empty db handler can remain but demo is handled above
 }
@@ -560,23 +522,23 @@ if (count.count === 0) {
 app.use(express.json());
 
 // API Routes
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
-  const user = db.prepare('SELECT * FROM users WHERE email = ? AND password = ?').get(email, password) as any;
+  const user = await db.get('SELECT * FROM users WHERE email = ? AND password = ?', [email, password]) as any;
   
   if (!user) {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
 
   if (user.role === 'restaurant' && !user.email_verified) {
-    const restaurant = db.prepare('SELECT account_verified FROM restaurants WHERE id = ?').get(user.restaurant_id) as any;
+    const restaurant = await db.get('SELECT account_verified FROM restaurants WHERE id = ?', [user.restaurant_id]) as any;
     if (!restaurant || restaurant.account_verified !== 1) {
       return res.status(403).json({ error: 'Please verify your email before logging in. Check your inbox for the verification link.' });
     }
   }
   
   try {
-    db.prepare('INSERT INTO user_logins (user_id) VALUES (?)').run(user.id);
+    await db.run('INSERT INTO user_logins (user_id) VALUES (?)', [user.id]);
   } catch (e) {
     console.error('Error logging user login:', e);
   }
@@ -585,14 +547,14 @@ app.post('/api/auth/login', (req, res) => {
   res.json({ success: true, user, token });
 });
 
-app.post('/api/auth/waiter-login', (req, res) => {
+app.post('/api/auth/waiter-login', async (req, res) => {
   const { phone_number, pin } = req.body;
-  const user = db.prepare("SELECT * FROM users WHERE phone_number = ? AND pin = ? AND role = 'waiter'").get(phone_number, pin) as any;
+  const user = await db.get("SELECT * FROM users WHERE phone_number = ? AND pin = ? AND role = 'waiter'", [phone_number, pin]) as any;
   if (!user) {
     return res.status(401).json({ error: 'Invalid phone number or PIN' });
   }
   try {
-    db.prepare('INSERT INTO user_logins (user_id) VALUES (?)').run(user.id);
+    await db.run('INSERT INTO user_logins (user_id) VALUES (?)', [user.id]);
   } catch (e) {}
   
   const token = jwt.sign({ id: user.id, role: user.role, restaurant_id: user.restaurant_id }, JWT_SECRET, { expiresIn: '48h' });
@@ -603,11 +565,11 @@ app.post('/api/auth/signup', async (req, res) => {
   const { email, password, restaurantName, businessType } = req.body;
   
   try {
-    const settings = db.prepare('SELECT default_currency FROM platform_settings LIMIT 1').get() as any;
+    const settings = await db.get('SELECT default_currency FROM platform_settings LIMIT 1') as any;
     const defaultCurrency = settings ? settings.default_currency : 'USD';
 
     // Get the Professional plan ID for testing
-    const proPlan = db.prepare("SELECT id FROM subscription_plans WHERE plan_name = 'Professional' LIMIT 1").get() as any;
+    const proPlan = await db.get("SELECT id FROM subscription_plans WHERE plan_name = 'Professional' LIMIT 1") as any;
     const planId = proPlan ? proPlan.id : 2;
     
     // Calculate expiry date (1 month from now)
@@ -619,12 +581,12 @@ app.post('/api/auth/signup', async (req, res) => {
     const verificationExpires = new Date();
     verificationExpires.setHours(verificationExpires.getHours() + 24); // 24 hours
 
-    const transaction = db.transaction(() => {
+    const transaction = db.transaction(async () => {
       const insertRestaurant = db.prepare('INSERT INTO restaurants (name, status, currency, subscription_plan_id, subscription_status, subscription_expiry_date, business_type) VALUES (?, ?, ?, ?, ?, ?, ?)');
-      const resId = insertRestaurant.run(restaurantName, 'Pending', defaultCurrency, planId, 'Active', expiryDateStr, businessType || 'restaurant').lastInsertRowid;
+      const resId = (await insertRestaurant.run(restaurantName, 'Pending', defaultCurrency, planId, 'Active', expiryDateStr, businessType || 'restaurant')).lastInsertRowid;
       
       const insertUser = db.prepare('INSERT INTO users (email, password, role, restaurant_id, verification_token, verification_expires) VALUES (?, ?, ?, ?, ?, ?)');
-      insertUser.run(email, password, 'restaurant', resId, verificationToken, verificationExpires.toISOString());
+      await insertUser.run(email, password, 'restaurant', resId, verificationToken, verificationExpires.toISOString());
       
       return resId;
     });
@@ -654,7 +616,7 @@ app.post('/api/auth/signup', async (req, res) => {
   }
 });
 
-app.post('/api/auth/verify-email', (req, res) => {
+app.post('/api/auth/verify-email', async (req, res) => {
   const { token } = req.body;
   
   if (!token) {
@@ -662,7 +624,7 @@ app.post('/api/auth/verify-email', (req, res) => {
   }
 
   try {
-    const user = db.prepare('SELECT * FROM users WHERE verification_token = ?').get(token) as any;
+    const user = await db.get('SELECT * FROM users WHERE verification_token = ?', [token]) as any;
     
     if (!user) {
       return res.status(400).json({ error: 'Invalid verification token' });
@@ -672,7 +634,7 @@ app.post('/api/auth/verify-email', (req, res) => {
       return res.status(400).json({ error: 'Verification token has expired' });
     }
 
-    db.prepare('UPDATE users SET email_verified = 1, verification_token = NULL, verification_expires = NULL WHERE id = ?').run(user.id);
+    await db.run('UPDATE users SET email_verified = 1, verification_token = NULL, verification_expires = NULL WHERE id = ?', [user.id]);
     
     res.json({ success: true, message: 'Email verified successfully' });
   } catch (error) {
@@ -681,15 +643,15 @@ app.post('/api/auth/verify-email', (req, res) => {
   }
 });
 
-app.patch('/api/admin/restaurants/:id/status', authenticateToken, authorizeRole(['admin']), (req, res) => {
+app.patch('/api/admin/restaurants/:id/status', authenticateToken, authorizeRole(['admin']), async (req, res) => {
   const { status } = req.body;
   const restaurantId = req.params.id;
   
-  db.prepare('UPDATE restaurants SET status = ? WHERE id = ?').run(status, restaurantId);
+  await db.run('UPDATE restaurants SET status = ? WHERE id = ?', [status, restaurantId]);
   res.json({ success: true, status });
 });
 
-app.patch('/api/admin/restaurants/:id', authenticateToken, authorizeRole(['admin']), (req, res) => {
+app.patch('/api/admin/restaurants/:id', authenticateToken, authorizeRole(['admin']), async (req, res) => {
   const restaurantId = req.params.id;
   const updates = req.body;
   
@@ -719,7 +681,7 @@ app.patch('/api/admin/restaurants/:id', authenticateToken, authorizeRole(['admin
   values.push(restaurantId);
 
   try {
-    db.prepare(`UPDATE restaurants SET ${setClauses.join(', ')} WHERE id = ?`).run(...values);
+    await db.run(`UPDATE restaurants SET ${setClauses.join(', ')} WHERE id = ?`, [...values]);
     res.json({ success: true });
   } catch (error) {
     console.error('Error updating restaurant:', error);
@@ -727,7 +689,7 @@ app.patch('/api/admin/restaurants/:id', authenticateToken, authorizeRole(['admin
   }
 });
 
-app.get('/api/admin/analytics', authenticateToken, authorizeRole(['admin']), (req, res) => {
+app.get('/api/admin/analytics', authenticateToken, authorizeRole(['admin']), async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     let dateFilter = '';
@@ -738,9 +700,9 @@ app.get('/api/admin/analytics', authenticateToken, authorizeRole(['admin']), (re
       params = [startDate, endDate + ' 23:59:59'];
     }
 
-    const totalRestaurants = db.prepare('SELECT COUNT(*) as count FROM restaurants WHERE status = \'Active\'').get() as any;
-    const totalOrders = db.prepare(`SELECT COUNT(*) as count FROM orders WHERE 1=1 ${dateFilter}`).get(...params) as any;
-    const totalRevenue = db.prepare(`SELECT SUM(total_amount) as total FROM orders WHERE status != 'Cancelled' ${dateFilter}`).get(...params) as any;
+    const totalRestaurants = await db.get('SELECT COUNT(*) as count FROM restaurants WHERE status = \'Active\'') as any;
+    const totalOrders = await db.get(`SELECT COUNT(*) as count FROM orders WHERE 1=1 ${dateFilter}`, [...params]) as any;
+    const totalRevenue = await db.get(`SELECT SUM(total_amount) as total FROM orders WHERE status != 'Cancelled' ${dateFilter}`, [...params]) as any;
     
     let trendDateFilter = `created_at >= date('now', '-7 days')`;
     let trendParams: any[] = [];
@@ -749,15 +711,15 @@ app.get('/api/admin/analytics', authenticateToken, authorizeRole(['admin']), (re
       trendParams = [startDate, endDate + ' 23:59:59'];
     }
 
-    const recentRevenue = db.prepare(`
+    const recentRevenue = await db.all(`
       SELECT date(created_at) as date, SUM(total_amount) as revenue, COUNT(*) as orders
       FROM orders
       WHERE ${trendDateFilter} AND status != 'Cancelled'
       GROUP BY date(created_at)
       ORDER BY date(created_at) ASC
-    `).all(...trendParams);
+    `, [...trendParams]);
 
-    const topRestaurants = db.prepare(`
+    const topRestaurants = await db.all(`
       SELECT r.name, COUNT(o.id) as order_count, SUM(o.total_amount) as revenue
       FROM restaurants r
       JOIN orders o ON r.id = o.restaurant_id
@@ -765,9 +727,9 @@ app.get('/api/admin/analytics', authenticateToken, authorizeRole(['admin']), (re
       GROUP BY r.id
       ORDER BY order_count DESC
       LIMIT 5
-    `).all(...params);
+    `, [...params]);
 
-    const topMenuItems = db.prepare(`
+    const topMenuItems = await db.all(`
       SELECT m.name, SUM(oi.quantity) as total_sold
       FROM order_items oi
       JOIN menu_items m ON oi.menu_item_id = m.id
@@ -776,9 +738,9 @@ app.get('/api/admin/analytics', authenticateToken, authorizeRole(['admin']), (re
       GROUP BY m.id
       ORDER BY total_sold DESC
       LIMIT 5
-    `).all(...params);
+    `, [...params]);
 
-    const topWaiters = db.prepare(`
+    const topWaiters = await db.all(`
       SELECT u.name, COUNT(o.id) as orders_handled
       FROM users u
       JOIN orders o ON u.id = o.waiter_id
@@ -786,27 +748,27 @@ app.get('/api/admin/analytics', authenticateToken, authorizeRole(['admin']), (re
       GROUP BY u.id
       ORDER BY orders_handled DESC
       LIMIT 5
-    `).all(...params);
+    `, [...params]);
 
-    const dailyOrderVolumes = db.prepare(`
+    const dailyOrderVolumes = await db.all(`
       SELECT date(created_at) as date, COUNT(*) as volume
       FROM orders
       WHERE ${trendDateFilter}
       GROUP BY date(created_at)
       ORDER BY date(created_at) ASC
-    `).all(...trendParams);
+    `, [...trendParams]);
 
-    const recentLogins = db.prepare(`
+    const recentLogins = await db.all(`
       SELECT date(login_time) as date, COUNT(*) as logins
       FROM user_logins
       WHERE ${trendDateFilter.replace(/created_at/g, 'login_time')}
       GROUP BY date(login_time)
       ORDER BY date(login_time) ASC
-    `).all(...trendParams);
+    `, [...trendParams]);
 
-    const aov = db.prepare(`SELECT AVG(total_amount) as average FROM orders WHERE status != 'Cancelled' ${dateFilter}`).get(...params) as any;
+    const aov = await db.get(`SELECT AVG(total_amount) as average FROM orders WHERE status != 'Cancelled' ${dateFilter}`, [...params]) as any;
     
-    const customerRetention = db.prepare(`
+    const customerRetention = await db.get(`
       WITH CustomerOrders AS (
         SELECT customer_email, COUNT(*) as order_count
         FROM orders
@@ -817,61 +779,61 @@ app.get('/api/admin/analytics', authenticateToken, authorizeRole(['admin']), (re
         SUM(CASE WHEN order_count = 1 THEN 1 ELSE 0 END) as new_customers,
         SUM(CASE WHEN order_count > 1 THEN 1 ELSE 0 END) as returning_customers
       FROM CustomerOrders
-    `).get(...params) as any;
+    `, [...params]) as any;
 
-    const recentWaiterCalls = db.prepare(`
+    const recentWaiterCalls = await db.all(`
       SELECT date(created_at) as date, COUNT(*) as calls
       FROM waiter_calls
       WHERE ${trendDateFilter}
       GROUP BY date(created_at)
       ORDER BY date(created_at) ASC
-    `).all(...trendParams);
+    `, [...trendParams]);
 
-    const recentSignups = db.prepare(`
+    const recentSignups = await db.all(`
       SELECT date(created_at) as date, COUNT(*) as signups
       FROM restaurants
       WHERE ${trendDateFilter}
       GROUP BY date(created_at)
       ORDER BY date(created_at) ASC
-    `).all(...trendParams);
+    `, [...trendParams]);
 
     // Platform GMV (Gross Merchandise Value)
-    const platformGmv = db.prepare(`SELECT SUM(total_amount) as gmv FROM orders WHERE status != 'Cancelled' ${dateFilter}`).get(...params) as any;
+    const platformGmv = await db.get(`SELECT SUM(total_amount) as gmv FROM orders WHERE status != 'Cancelled' ${dateFilter}`, [...params]) as any;
     
     // MRR (Monthly Recurring Revenue) - sum of active subscriptions
-    const mrr = db.prepare(`
+    const mrr = await db.get(`
       SELECT SUM(s.price_monthly) as mrr
       FROM restaurants r
       JOIN subscription_plans s ON r.subscription_plan_id = s.id
       WHERE r.subscription_status = 'Active' AND r.subscription_billing_cycle = 'monthly'
-    `).get() as any;
+    `) as any;
 
-    const arr = db.prepare(`
+    const arr = await db.get(`
       SELECT SUM(s.price_annual) as arr
       FROM restaurants r
       JOIN subscription_plans s ON r.subscription_plan_id = s.id
       WHERE r.subscription_status = 'Active' AND r.subscription_billing_cycle = 'annual'
-    `).get() as any;
+    `) as any;
 
     const totalMrr = (mrr?.mrr || 0) + ((arr?.arr || 0) / 12);
 
     // Total Platform Tax Liability Processed
-    const totalTaxLiability = db.prepare(`
+    const totalTaxLiability = await db.get(`
       SELECT SUM(vat_amount + state_tax_amount) as tax
       FROM orders
       WHERE status != 'Cancelled'
-    `).get() as any;
+    `) as any;
 
     // Churn Indicator (restaurants with no login/activity in 48 hours)
     // We'll use the latest order as a proxy for activity
-    const churnRiskRestaurants = db.prepare(`
+    const churnRiskRestaurants = await db.all(`
       SELECT r.id, r.name, r.email, MAX(o.created_at) as last_activity
       FROM restaurants r
       LEFT JOIN orders o ON r.id = o.restaurant_id
       WHERE r.status = 'Active'
       GROUP BY r.id
       HAVING last_activity IS NULL OR last_activity < datetime('now', '-48 hours')
-    `).all();
+    `);
 
     res.json({
       totalRestaurants: totalRestaurants.count,
@@ -902,9 +864,9 @@ app.get('/api/admin/analytics', authenticateToken, authorizeRole(['admin']), (re
   }
 });
 
-app.get('/api/admin/settings', authenticateToken, authorizeRole(['admin']), (req, res) => {
+app.get('/api/admin/settings', authenticateToken, authorizeRole(['admin']), async (req, res) => {
   try {
-    const settings = db.prepare('SELECT * FROM platform_settings LIMIT 1').get();
+    const settings = await db.get('SELECT * FROM platform_settings LIMIT 1');
     res.json(settings || { default_currency: 'USD', notifications_enabled: 1 });
   } catch (error) {
     console.error('Error fetching admin settings:', error);
@@ -912,9 +874,9 @@ app.get('/api/admin/settings', authenticateToken, authorizeRole(['admin']), (req
   }
 });
 
-app.get('/api/admin/plans', authenticateToken, authorizeRole(['admin']), (req, res) => {
+app.get('/api/admin/plans', authenticateToken, authorizeRole(['admin']), async (req, res) => {
   try {
-    const plans = db.prepare('SELECT * FROM subscription_plans ORDER BY id ASC').all();
+    const plans = await db.all('SELECT * FROM subscription_plans ORDER BY id ASC');
     res.json(plans);
   } catch (error) {
     console.error('Error fetching admin plans:', error);
@@ -922,16 +884,16 @@ app.get('/api/admin/plans', authenticateToken, authorizeRole(['admin']), (req, r
   }
 });
 
-app.post('/api/admin/plans', authenticateToken, authorizeRole(['admin']), (req, res) => {
+app.post('/api/admin/plans', authenticateToken, authorizeRole(['admin']), async (req, res) => {
   const { plan_name, price_monthly, price_annual, max_waiters, max_monthly_orders, analytics_retention_days, can_export_tax_reports, is_vip_featured, can_use_online_payments } = req.body;
   
   try {
-    const result = db.prepare(`
+    const result = await db.run(`
       INSERT INTO subscription_plans (plan_name, price_monthly, price_annual, max_waiters, max_monthly_orders, analytics_retention_days, can_export_tax_reports, is_vip_featured, can_use_online_payments)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(plan_name, price_monthly, price_annual, max_waiters, max_monthly_orders, analytics_retention_days, can_export_tax_reports ? 1 : 0, is_vip_featured ? 1 : 0, can_use_online_payments ? 1 : 0);
+    `, [plan_name, price_monthly, price_annual, max_waiters, max_monthly_orders, analytics_retention_days, can_export_tax_reports ? 1 : 0, is_vip_featured ? 1 : 0, can_use_online_payments ? 1 : 0]);
     
-    const newPlan = db.prepare('SELECT * FROM subscription_plans WHERE id = ?').get(result.lastInsertRowid);
+    const newPlan = await db.get('SELECT * FROM subscription_plans WHERE id = ?', [result.lastInsertRowid]);
     res.json(newPlan);
   } catch (error) {
     console.error('Error creating plan:', error);
@@ -939,16 +901,16 @@ app.post('/api/admin/plans', authenticateToken, authorizeRole(['admin']), (req, 
   }
 });
 
-app.put('/api/admin/plans/:id', authenticateToken, authorizeRole(['admin']), (req, res) => {
+app.put('/api/admin/plans/:id', authenticateToken, authorizeRole(['admin']), async (req, res) => {
   const { id } = req.params;
   const { price_monthly, price_annual, max_waiters, max_monthly_orders, analytics_retention_days, can_export_tax_reports, is_vip_featured, can_use_online_payments } = req.body;
   
   try {
-    db.prepare(`
+    await db.run(`
       UPDATE subscription_plans 
       SET price_monthly = ?, price_annual = ?, max_waiters = ?, max_monthly_orders = ?, analytics_retention_days = ?, can_export_tax_reports = ?, is_vip_featured = ?, can_use_online_payments = ?
       WHERE id = ?
-    `).run(price_monthly, price_annual, max_waiters, max_monthly_orders, analytics_retention_days, can_export_tax_reports ? 1 : 0, is_vip_featured ? 1 : 0, can_use_online_payments ? 1 : 0, id);
+    `, [price_monthly, price_annual, max_waiters, max_monthly_orders, analytics_retention_days, can_export_tax_reports ? 1 : 0, is_vip_featured ? 1 : 0, can_use_online_payments ? 1 : 0, id]);
     
     res.json({ success: true });
   } catch (error) {
@@ -957,7 +919,7 @@ app.put('/api/admin/plans/:id', authenticateToken, authorizeRole(['admin']), (re
   }
 });
 
-app.patch('/api/admin/settings', authenticateToken, authorizeRole(['admin']), (req, res) => {
+app.patch('/api/admin/settings', authenticateToken, authorizeRole(['admin']), async (req, res) => {
   const { default_currency, notifications_enabled, payment_paystack_enabled, paystack_public_key, paystack_secret_key, payment_monnify_enabled, monnify_api_key, monnify_secret_key, monnify_contract_code, payment_flutterwave_enabled, flutterwave_public_key, flutterwave_secret_key, simulate_order_enabled } = req.body;
   
   const updates = ['default_currency = ?', 'notifications_enabled = ?'];
@@ -1010,51 +972,51 @@ app.patch('/api/admin/settings', authenticateToken, authorizeRole(['admin']), (r
   }
   
   const query = `UPDATE platform_settings SET ${updates.join(', ')}`;
-  db.prepare(query).run(...values);
+  await db.run(query, [...values]);
   
   // Apply the new default currency to all restaurants
   if (default_currency) {
-    db.prepare('UPDATE restaurants SET currency = ?').run(default_currency);
+    await db.run('UPDATE restaurants SET currency = ?', [default_currency]);
   }
   
   res.json({ success: true });
 });
 
-app.patch('/api/admin/profile', authenticateToken, authorizeRole(['admin']), (req, res) => {
+app.patch('/api/admin/profile', authenticateToken, authorizeRole(['admin']), async (req, res) => {
   const { email, password } = req.body;
   // Assuming admin is the user with role 'admin'
-  const adminUser = db.prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1").get() as any;
+  const adminUser = await db.get("SELECT id FROM users WHERE role = 'admin' LIMIT 1") as any;
   if (!adminUser) return res.status(404).json({ error: 'Admin not found' });
   
   if (email && password) {
-    db.prepare('UPDATE users SET email = ?, password = ? WHERE id = ?').run(email, password, adminUser.id);
+    await db.run('UPDATE users SET email = ?, password = ? WHERE id = ?', [email, password, adminUser.id]);
   } else if (email) {
-    db.prepare('UPDATE users SET email = ? WHERE id = ?').run(email, adminUser.id);
+    await db.run('UPDATE users SET email = ? WHERE id = ?', [email, adminUser.id]);
   } else if (password) {
-    db.prepare('UPDATE users SET password = ? WHERE id = ?').run(password, adminUser.id);
+    await db.run('UPDATE users SET password = ? WHERE id = ?', [password, adminUser.id]);
   }
   
   res.json({ success: true });
 });
 
-app.get('/api/public/settings', (req, res) => {
+app.get('/api/public/settings', async (req, res) => {
   try {
-    const settings = db.prepare('SELECT simulate_order_enabled, global_copyright_footer FROM platform_settings LIMIT 1').get();
+    const settings = await db.get('SELECT simulate_order_enabled, global_copyright_footer FROM platform_settings LIMIT 1');
     res.json(settings || { simulate_order_enabled: 0 });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch public settings' });
   }
 });
 
-app.get('/api/restaurants', (req, res) => {
+app.get('/api/restaurants', async (req, res) => {
   try {
-    const restaurants = db.prepare(`
+    const restaurants = await db.all(`
       SELECT r.*, u.email as owner_email
       FROM restaurants r
       LEFT JOIN users u ON r.id = u.restaurant_id AND u.role = 'restaurant'
-    `).all() as any[];
+    `) as any[];
     
-    const platformSettings = db.prepare('SELECT payment_paystack_enabled, paystack_public_key, payment_monnify_enabled, monnify_api_key, monnify_contract_code, payment_flutterwave_enabled, flutterwave_public_key FROM platform_settings LIMIT 1').get() as any;
+    const platformSettings = await db.get('SELECT payment_paystack_enabled, paystack_public_key, payment_monnify_enabled, monnify_api_key, monnify_contract_code, payment_flutterwave_enabled, flutterwave_public_key FROM platform_settings LIMIT 1') as any;
     if (platformSettings) {
       restaurants.forEach(r => {
         r.platform_paystack_enabled = platformSettings.payment_paystack_enabled;
@@ -1077,14 +1039,14 @@ app.get('/api/restaurants', (req, res) => {
   }
 });
 
-app.get('/api/meals', (req, res) => {
+app.get('/api/meals', async (req, res) => {
   try {
-    const meals = db.prepare(`
+    const meals = await db.all(`
       SELECT m.*, r.name as restaurant_name, r.currency as restaurant_currency 
       FROM menu_items m 
       JOIN restaurants r ON m.restaurant_id = r.id 
       WHERE m.status = 'Available' AND r.status = 'Active'
-    `).all();
+    `);
     res.json(meals);
   } catch (error) {
     console.error('Error fetching meals:', error);
@@ -1092,12 +1054,12 @@ app.get('/api/meals', (req, res) => {
   }
 });
 
-app.get('/api/restaurants/:id', (req, res) => {
+app.get('/api/restaurants/:id', async (req, res) => {
   try {
-    const restaurant = db.prepare('SELECT * FROM restaurants WHERE id = ?').get(req.params.id) as any;
+    const restaurant = await db.get('SELECT * FROM restaurants WHERE id = ?', [req.params.id]) as any;
     if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
     
-    const platformSettings = db.prepare('SELECT payment_paystack_enabled, paystack_public_key, payment_monnify_enabled, monnify_api_key, monnify_contract_code, payment_flutterwave_enabled, flutterwave_public_key FROM platform_settings LIMIT 1').get() as any;
+    const platformSettings = await db.get('SELECT payment_paystack_enabled, paystack_public_key, payment_monnify_enabled, monnify_api_key, monnify_contract_code, payment_flutterwave_enabled, flutterwave_public_key FROM platform_settings LIMIT 1') as any;
     if (platformSettings) {
       restaurant.platform_paystack_enabled = platformSettings.payment_paystack_enabled;
       restaurant.platform_monnify_enabled = platformSettings.payment_monnify_enabled;
@@ -1118,10 +1080,10 @@ app.get('/api/restaurants/:id', (req, res) => {
   }
 });
 
-app.get('/api/restaurants/:id/menu', (req, res) => {
+app.get('/api/restaurants/:id/menu', async (req, res) => {
   try {
-    const categories = db.prepare('SELECT * FROM menu_categories WHERE restaurant_id = ?').all(req.params.id);
-    const items = db.prepare('SELECT * FROM menu_items WHERE restaurant_id = ?').all(req.params.id);
+    const categories = await db.all('SELECT * FROM menu_categories WHERE restaurant_id = ?', [req.params.id]);
+    const items = await db.all('SELECT * FROM menu_items WHERE restaurant_id = ?', [req.params.id]);
     res.json({ categories, items });
   } catch (error) {
     console.error('Error fetching menu:', error);
@@ -1129,12 +1091,12 @@ app.get('/api/restaurants/:id/menu', (req, res) => {
   }
 });
 
-app.post('/api/restaurants/:id/menu/bulk', authenticateToken, requireRestaurantAccess, (req, res) => {
+app.post('/api/restaurants/:id/menu/bulk', authenticateToken, requireRestaurantAccess, async (req, res) => {
   const { items } = req.body;
   const restaurant_id = req.params.id;
   
   try {
-    const transaction = db.transaction(() => {
+    const transaction = db.transaction(async () => {
       const categoriesMap = new Map();
       const catQuery = db.prepare('SELECT id FROM menu_categories WHERE restaurant_id = ? AND name = ?');
       const catInsert = db.prepare('INSERT INTO menu_categories (restaurant_id, name) VALUES (?, ?)');
@@ -1149,12 +1111,12 @@ app.post('/api/restaurants/:id/menu/bulk', authenticateToken, requireRestaurantA
           if (cat) {
             cat_id = cat.id;
           } else {
-            cat_id = catInsert.run(restaurant_id, item.category_name).lastInsertRowid;
+            cat_id = (await catInsert.run(restaurant_id, item.category_name)).lastInsertRowid;
           }
           categoriesMap.set(item.category_name, cat_id);
         }
         
-        itemInsert.run(restaurant_id, cat_id, item.name, item.description || null, item.price, item.prep_time || 15, 'Available');
+        await itemInsert.run(restaurant_id, cat_id, item.name, item.description || null, item.price, item.prep_time || 15, 'Available');
       }
     });
 
@@ -1166,7 +1128,7 @@ app.post('/api/restaurants/:id/menu/bulk', authenticateToken, requireRestaurantA
   }
 });
 
-app.post('/api/restaurants/:id/menu', authenticateToken, requireRestaurantAccess, upload.single('image'), (req, res) => {
+app.post('/api/restaurants/:id/menu', authenticateToken, requireRestaurantAccess, upload.single('image'), async (req, res) => {
   const { name, description, price, cogs, category_id, prep_time, dietary_badges, modifiers } = req.body;
   const restaurant_id = req.params.id;
   
@@ -1181,7 +1143,7 @@ app.post('/api/restaurants/:id/menu', authenticateToken, requireRestaurantAccess
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Available', ?, ?)
     `);
     
-    const result = insertItem.run(
+    const result = await insertItem.run(
       restaurant_id, 
       category_id, 
       name, 
@@ -1194,14 +1156,14 @@ app.post('/api/restaurants/:id/menu', authenticateToken, requireRestaurantAccess
       modifiers || null
     );
     
-    const newItem = db.prepare('SELECT * FROM menu_items WHERE id = ?').get(result.lastInsertRowid);
+    const newItem = await db.get('SELECT * FROM menu_items WHERE id = ?', [result.lastInsertRowid]);
     res.json(newItem);
   } catch (error) {
     res.status(500).json({ error: 'Failed to add menu item' });
   }
 });
 
-app.put('/api/restaurants/:id/menu/:itemId', authenticateToken, requireRestaurantAccess, upload.single('image'), (req, res) => {
+app.put('/api/restaurants/:id/menu/:itemId', authenticateToken, requireRestaurantAccess, upload.single('image'), async (req, res) => {
   const { name, description, price, cogs, category_id, prep_time, status, dietary_badges, modifiers } = req.body;
   const { itemId } = req.params;
   
@@ -1211,11 +1173,11 @@ app.put('/api/restaurants/:id/menu/:itemId', authenticateToken, requireRestauran
   }
   
   try {
-    db.prepare(`
+    await db.run(`
       UPDATE menu_items 
       SET name = ?, description = ?, price = ?, cogs = ?, category_id = ?, image_url = ?, prep_time = ?, status = ?, dietary_badges = ?, modifiers = ?
       WHERE id = ?
-    `).run(
+    `, [
       name, 
       description || null, 
       parseFloat(price), 
@@ -1227,34 +1189,34 @@ app.put('/api/restaurants/:id/menu/:itemId', authenticateToken, requireRestauran
       dietary_badges || null,
       modifiers || null,
       itemId
-    );
+    ]);
     
-    const updatedItem = db.prepare('SELECT * FROM menu_items WHERE id = ?').get(itemId);
+    const updatedItem = await db.get('SELECT * FROM menu_items WHERE id = ?', [itemId]);
     res.json(updatedItem);
   } catch (error) {
     res.status(500).json({ error: 'Failed to update menu item' });
   }
 });
 
-app.delete('/api/restaurants/:id/menu/:itemId', authenticateToken, requireRestaurantAccess, (req, res) => {
+app.delete('/api/restaurants/:id/menu/:itemId', authenticateToken, requireRestaurantAccess, async (req, res) => {
   const { itemId } = req.params;
   try {
-    db.prepare('DELETE FROM menu_items WHERE id = ?').run(itemId);
+    await db.run('DELETE FROM menu_items WHERE id = ?', [itemId]);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete menu item' });
   }
 });
 
-app.post('/api/restaurants/:id/categories', authenticateToken, requireRestaurantAccess, (req, res) => {
+app.post('/api/restaurants/:id/categories', authenticateToken, requireRestaurantAccess, async (req, res) => {
   const { name } = req.body;
   const restaurant_id = req.params.id;
   
   try {
     const insertCategory = db.prepare('INSERT INTO menu_categories (restaurant_id, name) VALUES (?, ?)');
-    const result = insertCategory.run(restaurant_id, name);
+    const result = await insertCategory.run(restaurant_id, name);
     
-    const newCategory = db.prepare('SELECT * FROM menu_categories WHERE id = ?').get(result.lastInsertRowid);
+    const newCategory = await db.get('SELECT * FROM menu_categories WHERE id = ?', [result.lastInsertRowid]);
     res.json(newCategory);
   } catch (error: any) {
     console.error('Error adding category:', error);
@@ -1262,33 +1224,33 @@ app.post('/api/restaurants/:id/categories', authenticateToken, requireRestaurant
   }
 });
 
-app.get('/api/restaurants/:id/waiters', authenticateToken, requireRestaurantAccess, (req, res) => {
+app.get('/api/restaurants/:id/waiters', authenticateToken, requireRestaurantAccess, async (req, res) => {
   try {
-    const waiters = db.prepare("SELECT id, name, email, phone_number, restaurant_id FROM users WHERE restaurant_id = ? AND role = 'waiter'").all(req.params.id);
+    const waiters = await db.all("SELECT id, name, email, phone_number, restaurant_id FROM users WHERE restaurant_id = ? AND role = 'waiter'", [req.params.id]);
     res.json(waiters);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch waiters' });
   }
 });
 
-app.post('/api/restaurants/:id/waiters', authenticateToken, requireRestaurantAccess, (req, res) => {
+app.post('/api/restaurants/:id/waiters', authenticateToken, requireRestaurantAccess, async (req, res) => {
   const { name, email, password, phone_number, pin } = req.body;
   const restaurant_id = req.params.id;
   
   try {
     // Check waiter limits
-    const restaurant = db.prepare(`
+    const restaurant = await db.get(`
       SELECT r.*, s.max_waiters 
       FROM restaurants r 
       LEFT JOIN subscription_plans s ON r.subscription_plan_id = s.id 
       WHERE r.id = ?
-    `).get(restaurant_id) as any;
+    `, [restaurant_id]) as any;
 
     if (restaurant && restaurant.max_waiters) {
-      const waiterCount = db.prepare(`
+      const waiterCount = await db.get(`
         SELECT COUNT(*) as count FROM users 
         WHERE restaurant_id = ? AND role = 'waiter'
-      `).get(restaurant_id) as { count: number };
+      `, [restaurant_id]) as { count: number };
 
       if (waiterCount.count >= restaurant.max_waiters) {
         return res.status(403).json({ error: 'UpgradeRequired', message: 'Maximum number of waiters reached. Please upgrade your subscription.' });
@@ -1299,9 +1261,9 @@ app.post('/api/restaurants/:id/waiters', authenticateToken, requireRestaurantAcc
     const finalPassword = password || `waiter_${Date.now()}`;
 
     const insertWaiter = db.prepare("INSERT INTO users (name, email, password, phone_number, pin, role, restaurant_id) VALUES (?, ?, ?, ?, ?, 'waiter', ?)");
-    const result = insertWaiter.run(name, finalEmail, finalPassword, phone_number || null, pin || null, restaurant_id);
+    const result = await insertWaiter.run(name, finalEmail, finalPassword, phone_number || null, pin || null, restaurant_id);
     
-    const newWaiter = db.prepare("SELECT id, name, email, phone_number, restaurant_id FROM users WHERE id = ?").get(result.lastInsertRowid);
+    const newWaiter = await db.get("SELECT id, name, email, phone_number, restaurant_id FROM users WHERE id = ?", [result.lastInsertRowid]);
     res.json(newWaiter);
   } catch (error: any) {
     if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
@@ -1311,17 +1273,17 @@ app.post('/api/restaurants/:id/waiters', authenticateToken, requireRestaurantAcc
   }
 });
 
-app.delete('/api/restaurants/:id/waiters/:waiterId', authenticateToken, requireRestaurantAccess, (req, res) => {
+app.delete('/api/restaurants/:id/waiters/:waiterId', authenticateToken, requireRestaurantAccess, async (req, res) => {
   const { waiterId } = req.params;
   try {
-    db.prepare("DELETE FROM users WHERE id = ? AND role = 'waiter'").run(waiterId);
+    await db.run("DELETE FROM users WHERE id = ? AND role = 'waiter'", [waiterId]);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete waiter' });
   }
 });
 
-app.patch('/api/restaurants/:id/settings', authenticateToken, requireRestaurantAccess, upload.single('logo'), (req, res) => {
+app.patch('/api/restaurants/:id/settings', authenticateToken, requireRestaurantAccess, upload.single('logo'), async (req, res) => {
   const { 
     waiter_allocation_enabled, 
     business_type,
@@ -1355,12 +1317,12 @@ app.patch('/api/restaurants/:id/settings', authenticateToken, requireRestaurantA
   try {
     // Check payment gateway lock
     if (payment_paystack_enabled || payment_monnify_enabled || payment_flutterwave_enabled) {
-      const restaurant = db.prepare(`
+      const restaurant = await db.get(`
         SELECT s.can_use_online_payments 
         FROM restaurants r 
         LEFT JOIN subscription_plans s ON r.subscription_plan_id = s.id 
         WHERE r.id = ?
-      `).get(restaurant_id) as any;
+      `, [restaurant_id]) as any;
 
       if (!restaurant || !restaurant.can_use_online_payments) {
         return res.status(403).json({ error: 'UpgradeRequired', message: 'Online payments are not available on your current plan. Please upgrade.' });
@@ -1462,7 +1424,7 @@ app.patch('/api/restaurants/:id/settings', authenticateToken, requireRestaurantA
       values.push(payment_flutterwave_enabled ? 1 : 0);
     }
 
-    const currentRestaurant = db.prepare('SELECT account_number, bank_name, account_name FROM restaurants WHERE id = ?').get(restaurant_id) as any;
+    const currentRestaurant = await db.get('SELECT account_number, bank_name, account_name FROM restaurants WHERE id = ?', [restaurant_id]) as any;
     let accountDetailsChanged = false;
 
     if (account_number !== undefined) {
@@ -1495,13 +1457,14 @@ app.patch('/api/restaurants/:id/settings', authenticateToken, requireRestaurantA
 
     if (updates.length > 0) {
       values.push(restaurant_id);
-      const result = db.prepare(`UPDATE restaurants SET ${updates.join(', ')} WHERE id = ?`).run(...values);
-      if (result.changes === 0) {
+      const result = await db.run(`UPDATE restaurants SET ${updates.join(', ')} WHERE id = ?`, [...values]);
+      // @ts-ignore
+    if (result.changes === 0) {
         return res.status(404).json({ error: 'Restaurant not found' });
       }
     }
     
-    const updatedRestaurant = db.prepare('SELECT * FROM restaurants WHERE id = ?').get(restaurant_id);
+    const updatedRestaurant = await db.get('SELECT * FROM restaurants WHERE id = ?', [restaurant_id]);
     res.json(updatedRestaurant);
   } catch (error: any) {
     console.error('Error updating settings:', error);
@@ -1509,25 +1472,25 @@ app.patch('/api/restaurants/:id/settings', authenticateToken, requireRestaurantA
   }
 });
 
-app.post('/api/admin/restaurants', authenticateToken, authorizeRole(['admin']), (req, res) => {
+app.post('/api/admin/restaurants', authenticateToken, authorizeRole(['admin']), async (req, res) => {
   const { name, owner_email, owner_password, business_type } = req.body;
   if (!name || !owner_email || !owner_password) {
     return res.status(400).json({ error: 'Name, owner email, and owner password are required' });
   }
 
   try {
-    const defaultCurrency = db.prepare('SELECT default_currency FROM platform_settings LIMIT 1').get() as any;
-    const plan = db.prepare("SELECT id FROM subscription_plans WHERE plan_name = 'Starter' LIMIT 1").get() as any;
+    const defaultCurrency = await db.get('SELECT default_currency FROM platform_settings LIMIT 1') as any;
+    const plan = await db.get("SELECT id FROM subscription_plans WHERE plan_name = 'Starter' LIMIT 1") as any;
     
-    const transaction = db.transaction(() => {
-      const existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get(owner_email);
+    const transaction = db.transaction(async () => {
+      const existingUser = await db.get('SELECT id FROM users WHERE email = ?', [owner_email]);
       if (existingUser) throw new Error('Email already in use');
 
-      const resId = db.prepare('INSERT INTO restaurants (name, status, currency, subscription_plan_id, subscription_status, business_type) VALUES (?, ?, ?, ?, ?, ?)').run(
+      const resId = (await db.run('INSERT INTO restaurants (name, status, currency, subscription_plan_id, subscription_status, business_type) VALUES (?, ?, ?, ?, ?, ?)', [
         name, 'Active', defaultCurrency ? defaultCurrency.default_currency : 'USD', plan ? plan.id : 1, 'Active', business_type || 'restaurant'
-      ).lastInsertRowid;
+      ])).lastInsertRowid;
       
-      db.prepare('INSERT INTO users (email, password, role, restaurant_id, email_verified) VALUES (?, ?, ?, ?, 1)').run(owner_email, owner_password, 'restaurant', resId);
+      await db.run('INSERT INTO users (email, password, role, restaurant_id, email_verified) VALUES (?, ?, ?, ?, 1)', [owner_email, owner_password, 'restaurant', resId]);
       
       return resId;
     });
@@ -1539,12 +1502,13 @@ app.post('/api/admin/restaurants', authenticateToken, authorizeRole(['admin']), 
   }
 });
 
-app.post('/api/admin/restaurants/:id/reset-password', authenticateToken, authorizeRole(['admin']), (req, res) => {
+app.post('/api/admin/restaurants/:id/reset-password', authenticateToken, authorizeRole(['admin']), async (req, res) => {
   const { new_password } = req.body;
   if (!new_password) return res.status(400).json({ error: 'New password is required' });
 
   try {
-    const result = db.prepare('UPDATE users SET password = ? WHERE restaurant_id = ? AND role = \'restaurant\'').run(new_password, req.params.id);
+    const result = await db.run('UPDATE users SET password = ? WHERE restaurant_id = ? AND role = \'restaurant\'', [new_password, req.params.id]);
+    // @ts-ignore
     if (result.changes > 0) {
       res.json({ success: true, message: 'Password reset successfully' });
     } else {
@@ -1555,26 +1519,27 @@ app.post('/api/admin/restaurants/:id/reset-password', authenticateToken, authori
   }
 });
 
-app.delete('/api/admin/restaurants/:id', authenticateToken, authorizeRole(['admin']), (req, res) => {
+app.delete('/api/admin/restaurants/:id', authenticateToken, authorizeRole(['admin']), async (req, res) => {
   const restaurant_id = req.params.id;
   try {
-    const transaction = db.transaction(() => {
+    const transaction = db.transaction(async () => {
       // Delete child records first to maintain data integrity
-      db.prepare('DELETE FROM order_logs WHERE order_id IN (SELECT id FROM orders WHERE restaurant_id = ?)').run(restaurant_id);
-      db.prepare('DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE restaurant_id = ?)').run(restaurant_id);
-      db.prepare('DELETE FROM waiter_calls WHERE restaurant_id = ?').run(restaurant_id);
-      db.prepare('DELETE FROM orders WHERE restaurant_id = ?').run(restaurant_id);
-      db.prepare('DELETE FROM menu_items WHERE category_id IN (SELECT id FROM menu_categories WHERE restaurant_id = ?)').run(restaurant_id);
-      db.prepare('DELETE FROM menu_categories WHERE restaurant_id = ?').run(restaurant_id);
-      db.prepare('DELETE FROM tables WHERE restaurant_id = ?').run(restaurant_id);
-      db.prepare('DELETE FROM user_logins WHERE user_id IN (SELECT id FROM users WHERE restaurant_id = ? AND role != \'admin\')').run(restaurant_id);
-      db.prepare('DELETE FROM users WHERE restaurant_id = ? AND role != \'admin\'').run(restaurant_id);
-      const result = db.prepare('DELETE FROM restaurants WHERE id = ?').run(restaurant_id);
+      await db.run('DELETE FROM order_logs WHERE order_id IN (SELECT id FROM orders WHERE restaurant_id = ?)', [restaurant_id]);
+      await db.run('DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE restaurant_id = ?)', [restaurant_id]);
+      await db.run('DELETE FROM waiter_calls WHERE restaurant_id = ?', [restaurant_id]);
+      await db.run('DELETE FROM orders WHERE restaurant_id = ?', [restaurant_id]);
+      await db.run('DELETE FROM menu_items WHERE category_id IN (SELECT id FROM menu_categories WHERE restaurant_id = ?)', [restaurant_id]);
+      await db.run('DELETE FROM menu_categories WHERE restaurant_id = ?', [restaurant_id]);
+      await db.run('DELETE FROM tables WHERE restaurant_id = ?', [restaurant_id]);
+      await db.run('DELETE FROM user_logins WHERE user_id IN (SELECT id FROM users WHERE restaurant_id = ? AND role != \'admin\')', [restaurant_id]);
+      await db.run('DELETE FROM users WHERE restaurant_id = ? AND role != \'admin\'', [restaurant_id]);
+      const result = await db.run('DELETE FROM restaurants WHERE id = ?', [restaurant_id]);
       return result;
     });
     
     const result = transaction();
     
+    // @ts-ignore
     if (result.changes > 0) {
       res.json({ message: 'Restaurant deleted successfully' });
     } else {
@@ -1586,18 +1551,19 @@ app.delete('/api/admin/restaurants/:id', authenticateToken, authorizeRole(['admi
   }
 });
 
-app.patch('/api/admin/restaurants/:id/verify-account', authenticateToken, authorizeRole(['admin']), (req, res) => {
+app.patch('/api/admin/restaurants/:id/verify-account', authenticateToken, authorizeRole(['admin']), async (req, res) => {
   const { status } = req.body; // 0=Pending, 1=Verified, 2=Rejected
   const restaurant_id = parseInt(req.params.id);
   
   try {
-    const transaction = db.transaction(() => {
-      const result = db.prepare('UPDATE restaurants SET account_verified = ? WHERE id = ?').run(status, restaurant_id);
-      if (result.changes === 0) {
+    const transaction = db.transaction(async () => {
+      const result = await db.run('UPDATE restaurants SET account_verified = ? WHERE id = ?', [status, restaurant_id]);
+      // @ts-ignore
+    if (result.changes === 0) {
         return false;
       }
       if (status === 1) {
-        db.prepare('UPDATE users SET email_verified = 1 WHERE restaurant_id = ? AND role = ?').run(restaurant_id, 'restaurant');
+        await db.run('UPDATE users SET email_verified = 1 WHERE restaurant_id = ? AND role = ?', [restaurant_id, 'restaurant']);
       }
       return true;
     });
@@ -1613,12 +1579,12 @@ app.patch('/api/admin/restaurants/:id/verify-account', authenticateToken, author
   }
 });
 
-app.patch('/api/orders/:id/waiter', authenticateToken, (req, res) => {
+app.patch('/api/orders/:id/waiter', authenticateToken, async (req, res) => {
   const { waiter_id } = req.body;
   const order_id = req.params.id;
   
   try {
-    const order = db.prepare("SELECT restaurant_id FROM orders WHERE id = ?").get(order_id) as any;
+    const order = await db.get("SELECT restaurant_id FROM orders WHERE id = ?", [order_id]) as any;
     if (!order) return res.status(404).json({ error: 'Order not found' });
     
     // Check if user has access to this restaurant
@@ -1626,7 +1592,7 @@ app.patch('/api/orders/:id/waiter', authenticateToken, (req, res) => {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    db.prepare("UPDATE orders SET waiter_id = ? WHERE id = ?").run(waiter_id, order_id);
+    await db.run("UPDATE orders SET waiter_id = ? WHERE id = ?", [waiter_id, order_id]);
     
     io.to(`restaurant_${order.restaurant_id}`).emit('order_waiter_assigned', { orderId: parseInt(order_id), waiter_id });
     
@@ -1636,37 +1602,37 @@ app.patch('/api/orders/:id/waiter', authenticateToken, (req, res) => {
   }
 });
 
-app.put('/api/restaurants/:id/categories/:categoryId', authenticateToken, requireRestaurantAccess, (req, res) => {
+app.put('/api/restaurants/:id/categories/:categoryId', authenticateToken, requireRestaurantAccess, async (req, res) => {
   const { categoryId } = req.params;
   const { name } = req.body;
   try {
-    db.prepare('UPDATE menu_categories SET name = ? WHERE id = ?').run(name, categoryId);
-    const updatedCategory = db.prepare('SELECT * FROM menu_categories WHERE id = ?').get(categoryId);
+    await db.run('UPDATE menu_categories SET name = ? WHERE id = ?', [name, categoryId]);
+    const updatedCategory = await db.get('SELECT * FROM menu_categories WHERE id = ?', [categoryId]);
     res.json(updatedCategory);
   } catch (error) {
     res.status(500).json({ error: 'Failed to update category' });
   }
 });
 
-app.delete('/api/restaurants/:id/categories/:categoryId', authenticateToken, requireRestaurantAccess, (req, res) => {
+app.delete('/api/restaurants/:id/categories/:categoryId', authenticateToken, requireRestaurantAccess, async (req, res) => {
   const { categoryId } = req.params;
   try {
     // Check if category is in use
-    const count = db.prepare('SELECT COUNT(*) as count FROM menu_items WHERE category_id = ?').get(categoryId) as { count: number };
+    const count = await db.get('SELECT COUNT(*) as count FROM menu_items WHERE category_id = ?', [categoryId]) as { count: number };
     if (count.count > 0) {
       return res.status(400).json({ error: 'Cannot delete category with existing menu items' });
     }
     
-    db.prepare('DELETE FROM menu_categories WHERE id = ?').run(categoryId);
+    await db.run('DELETE FROM menu_categories WHERE id = ?', [categoryId]);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete category' });
   }
 });
 
-app.get('/api/restaurants/:id/tables', authenticateToken, requireRestaurantAccess, (req, res) => {
+app.get('/api/restaurants/:id/tables', authenticateToken, requireRestaurantAccess, async (req, res) => {
   try {
-    const tables = db.prepare('SELECT * FROM tables WHERE restaurant_id = ?').all(req.params.id);
+    const tables = await db.all('SELECT * FROM tables WHERE restaurant_id = ?', [req.params.id]);
     res.json(tables);
   } catch (error) {
     console.error('Error fetching tables:', error);
@@ -1675,14 +1641,14 @@ app.get('/api/restaurants/:id/tables', authenticateToken, requireRestaurantAcces
 });
 
 // -- Admin User Management --
-app.get('/api/admin/users', authenticateToken, authorizeRole(['admin']), (req, res) => {
+app.get('/api/admin/users', authenticateToken, authorizeRole(['admin']), async (req, res) => {
   try {
-    const users = db.prepare(`
+    const users = await db.all(`
       SELECT u.id, u.email, u.role, u.name, u.phone_number, u.email_verified, r.name as restaurant_name
       FROM users u
       LEFT JOIN restaurants r ON u.restaurant_id = r.id
       ORDER BY u.id DESC
-    `).all();
+    `);
     res.json(users);
   } catch (error) {
     console.error('Error fetching admin users:', error);
@@ -1690,12 +1656,12 @@ app.get('/api/admin/users', authenticateToken, authorizeRole(['admin']), (req, r
   }
 });
 
-app.post('/api/admin/users', authenticateToken, authorizeRole(['admin']), (req, res) => {
+app.post('/api/admin/users', authenticateToken, authorizeRole(['admin']), async (req, res) => {
   try {
     const { email, password, role, name, restaurant_id } = req.body;
     
     // Check if email already exists
-    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+    const existing = await db.get('SELECT id FROM users WHERE email = ?', [email]);
     if (existing) {
       return res.status(400).json({ error: 'Email already in use' });
     }
@@ -1705,13 +1671,13 @@ app.post('/api/admin/users', authenticateToken, authorizeRole(['admin']), (req, 
       VALUES (?, ?, ?, ?, ?, 1)
     `);
     
-    const result = insert.run(email, password, role, name || null, restaurant_id || null);
-    const newUser = db.prepare(`
+    const result = await insert.run(email, password, role, name || null, restaurant_id || null);
+    const newUser = await db.get(`
       SELECT u.id, u.email, u.role, u.name, u.phone_number, u.email_verified, r.name as restaurant_name
       FROM users u
       LEFT JOIN restaurants r ON u.restaurant_id = r.id
       WHERE u.id = ?
-    `).get(result.lastInsertRowid);
+    `, [result.lastInsertRowid]);
     
     res.json(newUser);
   } catch (error) {
@@ -1720,7 +1686,7 @@ app.post('/api/admin/users', authenticateToken, authorizeRole(['admin']), (req, 
   }
 });
 
-app.put('/api/admin/users/:id', authenticateToken, authorizeRole(['admin']), (req, res) => {
+app.put('/api/admin/users/:id', authenticateToken, authorizeRole(['admin']), async (req, res) => {
   try {
     const { id } = req.params;
     const { role, name, password, restaurant_id } = req.body;
@@ -1736,7 +1702,7 @@ app.put('/api/admin/users/:id', authenticateToken, authorizeRole(['admin']), (re
     query += ' WHERE id = ?';
     params.push(id);
     
-    db.prepare(query).run(...params);
+    await db.run(query, [...params]);
     res.json({ success: true });
   } catch (error) {
     console.error('Error updating user:', error);
@@ -1744,7 +1710,7 @@ app.put('/api/admin/users/:id', authenticateToken, authorizeRole(['admin']), (re
   }
 });
 
-app.delete('/api/admin/users/:id', authenticateToken, authorizeRole(['admin']), (req, res) => {
+app.delete('/api/admin/users/:id', authenticateToken, authorizeRole(['admin']), async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -1753,7 +1719,7 @@ app.delete('/api/admin/users/:id', authenticateToken, authorizeRole(['admin']), 
       return res.status(400).json({ error: 'Cannot delete your own account' });
     }
     
-    db.prepare('DELETE FROM users WHERE id = ?').run(id);
+    await db.run('DELETE FROM users WHERE id = ?', [id]);
     res.json({ success: true });
   } catch (error) {
     console.error('Error deleting user:', error);
@@ -1761,18 +1727,19 @@ app.delete('/api/admin/users/:id', authenticateToken, authorizeRole(['admin']), 
   }
 });
 
-app.patch('/api/admin/users/:id/verify', authenticateToken, authorizeRole(['admin']), (req, res) => {
+app.patch('/api/admin/users/:id/verify', authenticateToken, authorizeRole(['admin']), async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const transaction = db.transaction(() => {
-      const result = db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(id);
-      if (result.changes === 0) {
+    const transaction = db.transaction(async () => {
+      const result = await db.run('UPDATE users SET email_verified = 1 WHERE id = ?', [id]);
+      // @ts-ignore
+    if (result.changes === 0) {
         return false;
       }
       
-      const user = db.prepare('SELECT role, restaurant_id FROM users WHERE id = ?').get(id) as any;
+      const user = await db.get('SELECT role, restaurant_id FROM users WHERE id = ?', [id]) as any;
       if (user && user.restaurant_id) {
-        db.prepare("UPDATE restaurants SET account_verified = 1, status = 'Active' WHERE id = ?").run(user.restaurant_id);
+        await db.run("UPDATE restaurants SET account_verified = 1, status = 'Active' WHERE id = ?", [user.restaurant_id]);
       }
       
       return true;
@@ -1789,7 +1756,7 @@ app.patch('/api/admin/users/:id/verify', authenticateToken, authorizeRole(['admi
   }
 });
 
-app.post('/api/restaurants/:id/tables', authenticateToken, requireRestaurantAccess, (req, res) => {
+app.post('/api/restaurants/:id/tables', authenticateToken, requireRestaurantAccess, async (req, res) => {
   const { table_number, address, is_room } = req.body;
   const restaurant_id = req.params.id;
   
@@ -1798,42 +1765,42 @@ app.post('/api/restaurants/:id/tables', authenticateToken, requireRestaurantAcce
   
   try {
     const insertTable = db.prepare('INSERT INTO tables (restaurant_id, table_number, qr_token, address, is_room) VALUES (?, ?, ?, ?, ?)');
-    const result = insertTable.run(restaurant_id, table_number, qr_token, address || null, is_room ? 1 : 0);
+    const result = await insertTable.run(restaurant_id, table_number, qr_token, address || null, is_room ? 1 : 0);
     
-    const newTable = db.prepare('SELECT * FROM tables WHERE id = ?').get(result.lastInsertRowid);
+    const newTable = await db.get('SELECT * FROM tables WHERE id = ?', [result.lastInsertRowid]);
     res.json(newTable);
   } catch (error) {
     res.status(500).json({ error: 'Failed to add table' });
   }
 });
 
-app.put('/api/restaurants/:id/tables/:tableId', authenticateToken, requireRestaurantAccess, (req, res) => {
+app.put('/api/restaurants/:id/tables/:tableId', authenticateToken, requireRestaurantAccess, async (req, res) => {
   const { table_number, address, is_room } = req.body;
   const { tableId } = req.params;
   
   try {
-    db.prepare('UPDATE tables SET table_number = ?, address = ?, is_room = ? WHERE id = ?').run(table_number, address || null, is_room ? 1 : 0, tableId);
-    const updatedTable = db.prepare('SELECT * FROM tables WHERE id = ?').get(tableId);
+    await db.run('UPDATE tables SET table_number = ?, address = ?, is_room = ? WHERE id = ?', [table_number, address || null, is_room ? 1 : 0, tableId]);
+    const updatedTable = await db.get('SELECT * FROM tables WHERE id = ?', [tableId]);
     res.json(updatedTable);
   } catch (error) {
     res.status(500).json({ error: 'Failed to update table' });
   }
 });
 
-app.delete('/api/restaurants/:id/tables/:tableId', authenticateToken, requireRestaurantAccess, (req, res) => {
+app.delete('/api/restaurants/:id/tables/:tableId', authenticateToken, requireRestaurantAccess, async (req, res) => {
   const { tableId } = req.params;
   
   try {
-    db.prepare('DELETE FROM tables WHERE id = ?').run(tableId);
+    await db.run('DELETE FROM tables WHERE id = ?', [tableId]);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete table' });
   }
 });
 
-app.get('/api/tables/validate/:token', (req, res) => {
+app.get('/api/tables/validate/:token', async (req, res) => {
   try {
-    const table = db.prepare('SELECT * FROM tables WHERE qr_token = ?').get(req.params.token);
+    const table = await db.get('SELECT * FROM tables WHERE qr_token = ?', [req.params.token]);
     if (!table) return res.status(404).json({ error: 'Invalid QR code' });
     res.json(table);
   } catch (error) {
@@ -1842,42 +1809,42 @@ app.get('/api/tables/validate/:token', (req, res) => {
   }
 });
 
-app.get('/api/orders/:id/track', (req, res) => {
+app.get('/api/orders/:id/track', async (req, res) => {
   try {
-    const order = db.prepare(`
+    const order = await db.get(`
       SELECT o.*, r.name as restaurant_name, r.currency as restaurant_currency
       FROM orders o
       JOIN restaurants r ON o.restaurant_id = r.id
       WHERE o.id = ?
-    `).get(req.params.id) as any;
+    `, [req.params.id]) as any;
     
     if (!order) return res.status(404).json({ error: 'Order not found' });
     
-    const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
+    const items = await db.all('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
     res.json({ order, items });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch order details' });
   }
 });
 
-app.post('/api/orders', (req, res) => {
+app.post('/api/orders', async (req, res) => {
   const { restaurant_id, table_id, items, total_amount, customer_email, customer_name, customer_address, special_instructions, payment_method, payment_status, paystack_reference, monnify_reference, flutterwave_reference, tip_amount, waiter_id, guest_last_name, room_number } = req.body;
   
   try {
     // Check GMV limits
-    const restaurant = db.prepare(`
+    const restaurant = await db.get(`
       SELECT r.*, s.max_monthly_gmv, s.plan_name
       FROM restaurants r 
       LEFT JOIN subscription_plans s ON r.subscription_plan_id = s.id 
       WHERE r.id = ?
-    `).get(restaurant_id) as any;
+    `, [restaurant_id]) as any;
 
     if (restaurant && restaurant.max_monthly_gmv && restaurant.max_monthly_gmv > 0) {
       const currentMonth = new Date().toISOString().slice(0, 7);
-      const currentGmv = db.prepare(`
+      const currentGmv = await db.get(`
         SELECT SUM(total_amount) as gmv FROM orders 
         WHERE restaurant_id = ? AND strftime('%Y-%m', created_at) = ? AND status != 'Cancelled'
-      `).get(restaurant_id, currentMonth) as { gmv: number };
+      `, [restaurant_id, currentMonth]) as { gmv: number };
 
       const proposedTotal = total_amount || 0;
       if (((currentGmv.gmv || 0) + proposedTotal) > restaurant.max_monthly_gmv) {
@@ -1899,22 +1866,22 @@ app.post('/api/orders', (req, res) => {
   const insertOrder = db.prepare('INSERT INTO orders (restaurant_id, table_id, total_amount, customer_email, customer_name, customer_address, special_instructions, order_number, payment_method, payment_status, paystack_reference, monnify_reference, flutterwave_reference, tip_amount, waiter_id, subtotal, vat_amount, state_tax_amount, service_charge, net_total, guest_last_name, room_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
   const insertOrderItem = db.prepare('INSERT INTO order_items (order_id, menu_item_id, quantity, price, notes, modifiers) VALUES (?, ?, ?, ?, ?, ?)');
   
-  const transaction = db.transaction(() => {
+  const transaction = db.transaction(async () => {
     let final_table_id = Number(table_id);
     if (!final_table_id) {
       // Find or create 'Takeaway/Online' table
-      const existingTable = db.prepare('SELECT id FROM tables WHERE restaurant_id = ? AND table_number = ?').get(restaurant_id, 'Takeaway/Online') as any;
+      const existingTable = await db.get('SELECT id FROM tables WHERE restaurant_id = ? AND table_number = ?', [restaurant_id, 'Takeaway/Online']) as any;
       if (existingTable) {
         final_table_id = existingTable.id;
       } else {
         const token = crypto.randomBytes(16).toString('hex');
-        const newTable = db.prepare('INSERT INTO tables (restaurant_id, table_number, qr_token) VALUES (?, ?, ?)').run(restaurant_id, 'Takeaway/Online', token);
+        const newTable = await db.run('INSERT INTO tables (restaurant_id, table_number, qr_token) VALUES (?, ?, ?)', [restaurant_id, 'Takeaway/Online', token]);
         final_table_id = Number(newTable.lastInsertRowid);
       }
     }
 
     // Calculate tax splits
-    const restaurant = db.prepare('SELECT vat_rate FROM restaurants WHERE id = ?').get(restaurant_id) as any;
+    const restaurant = await db.get('SELECT vat_rate FROM restaurants WHERE id = ?', [restaurant_id]) as any;
     const vat_rate = restaurant?.vat_rate || 0;
     const state_tax_rate = 0; // Or get from restaurant if added
     const service_charge_rate = 0; // Or get from restaurant if added
@@ -1930,7 +1897,7 @@ app.post('/api/orders', (req, res) => {
     const calculated_net_total = calculated_subtotal;
     const calculated_total = calculated_subtotal + calculated_vat + calculated_state_tax + calculated_service_charge + (tip_amount || 0);
 
-    const orderResult = insertOrder.run(
+    const orderResult = await insertOrder.run(
       restaurant_id, 
       final_table_id, 
       calculated_total, 
@@ -1954,10 +1921,11 @@ app.post('/api/orders', (req, res) => {
       guest_last_name || null,
       room_number || null
     );
+    // @ts-ignore
     const orderId = orderResult.lastInsertRowid;
     
     for (const item of items) {
-      insertOrderItem.run(orderId, item.id, item.quantity, item.price, item.notes || null, item.modifiers ? JSON.stringify(item.modifiers) : null);
+      await insertOrderItem.run(orderId, item.id, item.quantity, item.price, item.notes || null, item.modifiers ? JSON.stringify(item.modifiers) : null);
     }
     
     return orderId;
@@ -1965,19 +1933,19 @@ app.post('/api/orders', (req, res) => {
   
   try {
     const orderId = transaction();
-    const newOrder = db.prepare(`
+    const newOrder = await db.get(`
       SELECT o.*, t.table_number 
       FROM orders o 
       LEFT JOIN tables t ON o.table_id = t.id 
       WHERE o.id = ?
-    `).get(orderId) as any;
+    `, [orderId]) as any;
     
-    const newOrderItems = db.prepare(`
+    const newOrderItems = await db.all(`
       SELECT oi.*, m.name 
       FROM order_items oi 
       JOIN menu_items m ON oi.menu_item_id = m.id 
       WHERE oi.order_id = ?
-    `).all(orderId);
+    `, [orderId]);
     
     // Notify restaurant via WebSocket
     io.to(`restaurant_${restaurant_id}`).emit('new_order', { order: newOrder, items: newOrderItems });
@@ -2006,7 +1974,7 @@ app.post('/api/orders', (req, res) => {
   }
 });
 
-app.post('/api/restaurants/:id/tables/:tableId/call', (req, res) => {
+app.post('/api/restaurants/:id/tables/:tableId/call', async (req, res) => {
   const { type } = req.body; // 'call' or 'bill'
   const restaurant_id = req.params.id;
   const table_id = req.params.tableId;
@@ -2017,14 +1985,14 @@ app.post('/api/restaurants/:id/tables/:tableId/call', (req, res) => {
       INSERT INTO waiter_calls (restaurant_id, table_id, type, status)
       VALUES (?, ?, ?, 'pending')
     `);
-    const result = insertCall.run(restaurant_id, actualTableId, type);
+    const result = await insertCall.run(restaurant_id, actualTableId, type);
     
-    const newCall = db.prepare(`
+    const newCall = await db.get(`
       SELECT wc.*, t.table_number 
       FROM waiter_calls wc
       LEFT JOIN tables t ON wc.table_id = t.id
       WHERE wc.id = ?
-    `).get(result.lastInsertRowid);
+    `, [result.lastInsertRowid]);
     
     // Notify waiters via socket
     io.to(`restaurant_${restaurant_id}`).emit('new_waiter_call', newCall);
@@ -2036,15 +2004,15 @@ app.post('/api/restaurants/:id/tables/:tableId/call', (req, res) => {
   }
 });
 
-app.get('/api/restaurants/:id/waiter-calls', authenticateToken, requireRestaurantAccess, (req, res) => {
+app.get('/api/restaurants/:id/waiter-calls', authenticateToken, requireRestaurantAccess, async (req, res) => {
   try {
-    const calls = db.prepare(`
+    const calls = await db.all(`
       SELECT wc.*, t.table_number 
       FROM waiter_calls wc
       JOIN tables t ON wc.table_id = t.id
       WHERE wc.restaurant_id = ? AND wc.status = 'pending'
       ORDER BY wc.created_at ASC
-    `).all(req.params.id);
+    `, [req.params.id]);
     res.json(calls);
   } catch (error) {
     console.error('Error fetching waiter calls:', error);
@@ -2052,16 +2020,16 @@ app.get('/api/restaurants/:id/waiter-calls', authenticateToken, requireRestauran
   }
 });
 
-app.put('/api/waiter-calls/:callId/resolve', authenticateToken, (req, res) => {
+app.put('/api/waiter-calls/:callId/resolve', authenticateToken, async (req, res) => {
   try {
-    const call = db.prepare('SELECT * FROM waiter_calls WHERE id = ?').get(req.params.callId) as any;
+    const call = await db.get('SELECT * FROM waiter_calls WHERE id = ?', [req.params.callId]) as any;
     if (!call) return res.status(404).json({ error: 'Call not found' });
     
     if ((req as any).user?.role !== 'admin' && (req as any).user?.restaurant_id !== call.restaurant_id) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    db.prepare(`UPDATE waiter_calls SET status = 'resolved' WHERE id = ?`).run(req.params.callId);
+    await db.run(`UPDATE waiter_calls SET status = 'resolved' WHERE id = ?`, [req.params.callId]);
     
     io.to(`restaurant_${call.restaurant_id}`).emit('waiter_call_resolved', call.id);
     
@@ -2072,39 +2040,39 @@ app.put('/api/waiter-calls/:callId/resolve', authenticateToken, (req, res) => {
   }
 });
 
-app.get('/api/restaurants/:id/orders', authenticateToken, requireRestaurantAccess, (req, res) => {
+app.get('/api/restaurants/:id/orders', authenticateToken, requireRestaurantAccess, async (req, res) => {
   try {
-    const restaurant = db.prepare(`
+    const restaurant = await db.get(`
       SELECT r.*, s.analytics_retention_days 
       FROM restaurants r 
       LEFT JOIN subscription_plans s ON r.subscription_plan_id = s.id 
       WHERE r.id = ?
-    `).get(req.params.id) as any;
+    `, [req.params.id]) as any;
 
     let retentionDays = 7; // Default
     if (restaurant && restaurant.analytics_retention_days) {
       retentionDays = restaurant.analytics_retention_days;
     }
 
-    const orders = db.prepare(`
+    const orders = await db.all(`
       SELECT o.*, t.table_number, t.is_room, w.name as waiter_name
       FROM orders o 
       LEFT JOIN tables t ON o.table_id = t.id 
       LEFT JOIN users w ON o.waiter_id = w.id
       WHERE o.restaurant_id = ? AND o.created_at >= date('now', '-${retentionDays} days')
       ORDER BY o.created_at DESC
-    `).all(req.params.id);
+    `, [req.params.id]);
     
     const orderIds = orders.map((o: any) => o.id);
     let orderItems = [];
     if (orderIds.length > 0) {
       const placeholders = orderIds.map(() => '?').join(',');
-      orderItems = db.prepare(`
+      orderItems = await db.all(`
         SELECT oi.*, m.name 
         FROM order_items oi 
         JOIN menu_items m ON oi.menu_item_id = m.id 
         WHERE oi.order_id IN (${placeholders})
-      `).all(...orderIds);
+      `, [...orderIds]);
     }
     
     res.json({ orders, orderItems });
@@ -2114,19 +2082,19 @@ app.get('/api/restaurants/:id/orders', authenticateToken, requireRestaurantAcces
   }
 });
 
-app.patch('/api/orders/:id/payment_status', authenticateToken, (req, res) => {
+app.patch('/api/orders/:id/payment_status', authenticateToken, async (req, res) => {
   const { payment_status } = req.body;
   const orderId = parseInt(req.params.id, 10);
   
   try {
-    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
+    const order = await db.get('SELECT * FROM orders WHERE id = ?', [orderId]) as any;
     if (!order) return res.status(404).json({ error: 'Order not found' });
     
     if ((req as any).user?.role !== 'admin' && (req as any).user?.restaurant_id !== order.restaurant_id) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    db.prepare('UPDATE orders SET payment_status = ? WHERE id = ?').run(payment_status, orderId);
+    await db.run('UPDATE orders SET payment_status = ? WHERE id = ?', [payment_status, orderId]);
     
     io.to(`order_${orderId}`).emit('order_payment_update', { orderId, payment_status });
     io.to(`restaurant_${order.restaurant_id}`).emit('order_payment_update', { orderId, payment_status });
@@ -2138,17 +2106,17 @@ app.patch('/api/orders/:id/payment_status', authenticateToken, (req, res) => {
   }
 });
 
-app.patch('/api/orders/:id/confirm-transfer', authenticateToken, (req, res) => {
+app.patch('/api/orders/:id/confirm-transfer', authenticateToken, async (req, res) => {
   const orderId = parseInt(req.params.id, 10);
   try {
-    const order = db.prepare("SELECT * FROM orders WHERE id = ?").get(orderId) as any;
+    const order = await db.get("SELECT * FROM orders WHERE id = ?", [orderId]) as any;
     if (!order) return res.status(404).json({ error: 'Order not found' });
     
     if ((req as any).user?.role !== 'admin' && (req as any).user?.restaurant_id !== order.restaurant_id) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    db.prepare("UPDATE orders SET payment_status = 'Paid', status = 'Preparing' WHERE id = ?").run(orderId);
+    await db.run("UPDATE orders SET payment_status = 'Paid', status = 'Preparing' WHERE id = ?", [orderId]);
     io.to(`restaurant_${order.restaurant_id}`).emit('order_status_updated', { orderId, status: 'Preparing' });
     io.to(`order_${orderId}`).emit('order_status_update', { orderId, status: 'Preparing' });
     res.json({ success: true });
@@ -2157,27 +2125,27 @@ app.patch('/api/orders/:id/confirm-transfer', authenticateToken, (req, res) => {
   }
 });
 
-app.get('/api/subscription-plans', (req, res) => {
+app.get('/api/subscription-plans', async (req, res) => {
   try {
-    const plans = db.prepare('SELECT * FROM subscription_plans').all();
+    const plans = await db.all('SELECT * FROM subscription_plans');
     res.json(plans);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.patch('/api/restaurants/:id/subscription', authenticateToken, requireRestaurantAccess, (req, res) => {
+app.patch('/api/restaurants/:id/subscription', authenticateToken, requireRestaurantAccess, async (req, res) => {
   const { id } = req.params;
   const { plan_id, billing_cycle } = req.body;
   try {
-    db.prepare('UPDATE restaurants SET subscription_plan_id = ?, subscription_billing_cycle = ?, subscription_expiry_date = NULL WHERE id = ?').run(plan_id, billing_cycle, id);
+    await db.run('UPDATE restaurants SET subscription_plan_id = ?, subscription_billing_cycle = ?, subscription_expiry_date = NULL WHERE id = ?', [plan_id, billing_cycle, id]);
     res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.get('/api/restaurants/:id/analytics', authenticateToken, requireRestaurantAccess, (req, res) => {
+app.get('/api/restaurants/:id/analytics', authenticateToken, requireRestaurantAccess, async (req, res) => {
   const { id } = req.params;
   try {
     const { startDate, endDate } = req.query;
@@ -2189,8 +2157,8 @@ app.get('/api/restaurants/:id/analytics', authenticateToken, requireRestaurantAc
       params.push(startDate, endDate + ' 23:59:59');
     }
 
-    const totalOrders = db.prepare(`SELECT COUNT(*) as count FROM orders WHERE restaurant_id = ? ${dateFilter}`).get(...params) as any;
-    const totalRevenue = db.prepare(`SELECT SUM(total_amount) as total FROM orders WHERE restaurant_id = ? AND status != 'Cancelled' ${dateFilter}`).get(...params) as any;
+    const totalOrders = await db.get(`SELECT COUNT(*) as count FROM orders WHERE restaurant_id = ? ${dateFilter}`, [...params]) as any;
+    const totalRevenue = await db.get(`SELECT SUM(total_amount) as total FROM orders WHERE restaurant_id = ? AND status != 'Cancelled' ${dateFilter}`, [...params]) as any;
     
     let trendDateFilter = `created_at >= date('now', '-7 days')`;
     let trendParams: any[] = [id];
@@ -2199,15 +2167,15 @@ app.get('/api/restaurants/:id/analytics', authenticateToken, requireRestaurantAc
       trendParams.push(startDate, endDate + ' 23:59:59');
     }
 
-    const recentRevenue = db.prepare(`
+    const recentRevenue = await db.all(`
       SELECT date(created_at) as date, SUM(total_amount) as revenue, COUNT(*) as orders
       FROM orders
       WHERE restaurant_id = ? AND ${trendDateFilter} AND status != 'Cancelled'
       GROUP BY date(created_at)
       ORDER BY date(created_at) ASC
-    `).all(...trendParams);
+    `, [...trendParams]);
 
-    const topItems = db.prepare(`
+    const topItems = await db.all(`
       SELECT m.name, SUM(oi.quantity) as total_sold
       FROM order_items oi
       JOIN menu_items m ON oi.menu_item_id = m.id
@@ -2216,9 +2184,9 @@ app.get('/api/restaurants/:id/analytics', authenticateToken, requireRestaurantAc
       GROUP BY m.id
       ORDER BY total_sold DESC
       LIMIT 5
-    `).all(...params);
+    `, [...params]);
 
-    const aov = db.prepare(`SELECT AVG(total_amount) as average FROM orders WHERE restaurant_id = ? AND status != 'Cancelled' ${dateFilter}`).get(...params) as any;
+    const aov = await db.get(`SELECT AVG(total_amount) as average FROM orders WHERE restaurant_id = ? AND status != 'Cancelled' ${dateFilter}`, [...params]) as any;
 
     res.json({
       totalOrders: totalOrders.count,
@@ -2233,21 +2201,21 @@ app.get('/api/restaurants/:id/analytics', authenticateToken, requireRestaurantAc
   }
 });
 
-app.get('/api/restaurants/:id/z-report', authenticateToken, requireRestaurantAccess, (req, res) => {
+app.get('/api/restaurants/:id/z-report', authenticateToken, requireRestaurantAccess, async (req, res) => {
   const { id } = req.params;
   const { date } = req.query; // YYYY-MM-DD
   
   try {
-    const restaurant = db.prepare('SELECT * FROM restaurants WHERE id = ?').get(id) as any;
+    const restaurant = await db.get('SELECT * FROM restaurants WHERE id = ?', [id]) as any;
     if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
 
     const targetDate = date || new Date().toISOString().slice(0, 10);
     
-    const orders = db.prepare(`
+    const orders = await db.all(`
       SELECT total_amount, subtotal, vat_amount, state_tax_amount, service_charge, tip_amount, payment_method 
       FROM orders 
       WHERE restaurant_id = ? AND date(created_at) = ? AND status != 'Cancelled'
-    `).all(id, targetDate) as any[];
+    `, [id, targetDate]) as any[];
 
     let grossSales = 0;
     let netSales = 0;
@@ -2288,17 +2256,17 @@ app.get('/api/restaurants/:id/z-report', authenticateToken, requireRestaurantAcc
   }
 });
 
-app.get('/api/restaurants/:id/tax-report.csv', authenticateToken, requireRestaurantAccess, (req, res) => {
+app.get('/api/restaurants/:id/tax-report.csv', authenticateToken, requireRestaurantAccess, async (req, res) => {
   const { id } = req.params;
   const { month } = req.query; // YYYY-MM
   
   try {
-    const restaurant = db.prepare(`
+    const restaurant = await db.get(`
       SELECT r.*, s.can_export_tax_reports 
       FROM restaurants r 
       LEFT JOIN subscription_plans s ON r.subscription_plan_id = s.id 
       WHERE r.id = ?
-    `).get(id) as any;
+    `, [id]) as any;
 
     if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
     if (!restaurant.can_export_tax_reports) {
@@ -2306,10 +2274,10 @@ app.get('/api/restaurants/:id/tax-report.csv', authenticateToken, requireRestaur
     }
 
     const targetMonth = month || new Date().toISOString().slice(0, 7);
-    const orders = db.prepare(`
+    const orders = await db.all(`
       SELECT * FROM orders 
       WHERE restaurant_id = ? AND strftime('%Y-%m', created_at) = ? AND status != 'Cancelled'
-    `).all(id, targetMonth) as any[];
+    `, [id, targetMonth]) as any[];
     
     let csv = 'Order ID,Date,Gross Total,Net Total,VAT,State Tax,Payment Method\n';
     orders.forEach(o => {
@@ -2326,11 +2294,11 @@ app.get('/api/restaurants/:id/tax-report.csv', authenticateToken, requireRestaur
 
 
 
-app.patch('/api/orders/:id/discount', authenticateToken, (req, res) => {
+app.patch('/api/orders/:id/discount', authenticateToken, async (req, res) => {
   const { discount_amount, reason } = req.body;
   const orderId = parseInt(req.params.id, 10);
   
-  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
+  const order = await db.get('SELECT * FROM orders WHERE id = ?', [orderId]) as any;
   if (!order) return res.status(404).json({ error: 'Order not found' });
   
   if ((req as any).user?.role !== 'admin' && (req as any).user?.restaurant_id !== order.restaurant_id) {
@@ -2344,18 +2312,18 @@ app.patch('/api/orders/:id/discount', authenticateToken, (req, res) => {
 
   const newTotal = order.total_amount - discount;
 
-  db.prepare('UPDATE orders SET discount_amount = ?, discount_reason = ?, total_amount = ? WHERE id = ?').run(discount, reason, newTotal, orderId);
-  const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
+  await db.run('UPDATE orders SET discount_amount = ?, discount_reason = ?, total_amount = ? WHERE id = ?', [discount, reason, newTotal, orderId]);
+  const updatedOrder = await db.get('SELECT * FROM orders WHERE id = ?', [orderId]) as any;
   
   try {
-    db.prepare('INSERT INTO order_logs (order_id, staff_id, action, reason, previous_total, new_total) VALUES (?, ?, ?, ?, ?, ?)').run(
+    await db.run('INSERT INTO order_logs (order_id, staff_id, action, reason, previous_total, new_total) VALUES (?, ?, ?, ?, ?, ?)', [
       orderId,
       (req as any).user?.id || null,
       'DISCOUNT',
       reason || `Applied discount of ${discount}`,
       order.total_amount,
       newTotal
-    );
+    ]);
   } catch (e) {
     console.error('Failed to log discount:', e);
   }
@@ -2366,30 +2334,30 @@ app.patch('/api/orders/:id/discount', authenticateToken, (req, res) => {
   res.json(updatedOrder);
 });
 
-app.patch('/api/orders/:id/status', authenticateToken, (req, res) => {
+app.patch('/api/orders/:id/status', authenticateToken, async (req, res) => {
   const { status, reason } = req.body;
   const orderId = parseInt(req.params.id, 10);
   
-  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
+  const order = await db.get('SELECT * FROM orders WHERE id = ?', [orderId]) as any;
   if (!order) return res.status(404).json({ error: 'Order not found' });
   
   if ((req as any).user?.role !== 'admin' && (req as any).user?.restaurant_id !== order.restaurant_id) {
     return res.status(403).json({ error: 'Unauthorized' });
   }
 
-  db.prepare('UPDATE orders SET status = ? WHERE id = ?').run(status, orderId);
-  const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
+  await db.run('UPDATE orders SET status = ? WHERE id = ?', [status, orderId]);
+  const updatedOrder = await db.get('SELECT * FROM orders WHERE id = ?', [orderId]) as any;
   
   if (status === 'Cancelled' || status === 'Voided') {
     try {
-      db.prepare('INSERT INTO order_logs (order_id, staff_id, action, reason, previous_total, new_total) VALUES (?, ?, ?, ?, ?, ?)').run(
+      await db.run('INSERT INTO order_logs (order_id, staff_id, action, reason, previous_total, new_total) VALUES (?, ?, ?, ?, ?, ?)', [
         orderId,
         (req as any).user?.id || null,
         status.toUpperCase(),
         reason || 'Status changed to ' + status,
         order.total_amount,
         order.total_amount
-      );
+      ]);
     } catch (e) {
       console.error('Error logging order status change:', e);
     }
@@ -2414,30 +2382,30 @@ app.patch('/api/orders/:id/status', authenticateToken, (req, res) => {
   res.json({ success: true, status });
 });
 
-app.get('/api/customer/orders', (req, res) => {
+app.get('/api/customer/orders', async (req, res) => {
   try {
     const { email } = req.query;
     if (!email) return res.status(400).json({ error: 'Email is required' });
     
-    const orders = db.prepare(`
+    const orders = await db.all(`
       SELECT o.*, t.table_number, t.is_room, r.name as restaurant_name, r.currency as restaurant_currency
       FROM orders o 
       LEFT JOIN tables t ON o.table_id = t.id 
       JOIN restaurants r ON o.restaurant_id = r.id
       WHERE o.customer_email = ? 
       ORDER BY o.created_at DESC
-    `).all(email);
+    `, [email]);
     
     const orderIds = orders.map((o: any) => o.id);
     let orderItems = [];
     if (orderIds.length > 0) {
       const placeholders = orderIds.map(() => '?').join(',');
-      orderItems = db.prepare(`
+      orderItems = await db.all(`
         SELECT oi.*, m.name 
         FROM order_items oi 
         JOIN menu_items m ON oi.menu_item_id = m.id 
         WHERE oi.order_id IN (${placeholders})
-      `).all(...orderIds);
+      `, [...orderIds]);
     }
     
     res.json({ orders, orderItems });
@@ -2466,7 +2434,10 @@ io.on('connection', (socket) => {
   });
 });
 
+}
+
 async function startServer() {
+  await initializeDatabaseAndRoutes();
   app.use('/uploads', express.static(path.join(rootDir, 'uploads')));
 
   if (process.env.NODE_ENV !== 'production') {
@@ -2479,7 +2450,7 @@ async function startServer() {
   } else {
     const distPath = path.join(rootDir, 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
+    app.get('*', async (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
