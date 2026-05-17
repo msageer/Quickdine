@@ -1082,7 +1082,7 @@ app.patch('/api/admin/profile', authenticateToken, authorizeRole(['admin']), asy
 
 app.get('/api/public/settings', async (req, res) => {
   try {
-    const settings = await db.get('SELECT simulate_order_enabled, global_copyright_footer FROM platform_settings LIMIT 1');
+    const settings = await db.get('SELECT simulate_order_enabled, global_copyright_footer, payment_flutterwave_enabled, flutterwave_public_key FROM platform_settings LIMIT 1');
     res.json(settings || { simulate_order_enabled: 0 });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch public settings' });

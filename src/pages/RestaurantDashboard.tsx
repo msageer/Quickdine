@@ -2258,33 +2258,33 @@ export default function RestaurantDashboard() {
                     <h2 className="text-lg font-bold text-ink-900 font-serif mb-4">Subscription & Billing</h2>
                     
                     <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-ink-700 mb-1">Current Plan</label>
-                        <select
-                          name="subscription_plan_id"
-                          value={restaurant?.subscription_plan_id || ''}
-                          onChange={(e) => setRestaurant((prev: any) => ({ ...prev, subscription_plan_id: parseInt(e.target.value) }))}
-                          className="w-full px-4 py-2 border border-ink-200 rounded-xl focus:ring-brand-500 focus:border-brand-500"
-                        >
-                          <option value="">Select a plan</option>
-                          {subscriptionPlans.map(plan => (
-                            <option key={plan.id} value={plan.id}>
-                              {plan.plan_name} - {restaurant?.subscription_billing_cycle === 'annual' ? `₦${plan.price_annual.toLocaleString()}/yr` : `₦${plan.price_monthly.toLocaleString()}/mo`}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-ink-700 mb-1">Billing Cycle</label>
-                        <select
-                          name="subscription_billing_cycle"
-                          value={restaurant?.subscription_billing_cycle || 'monthly'}
-                          onChange={(e) => setRestaurant((prev: any) => ({ ...prev, subscription_billing_cycle: e.target.value }))}
-                          className="w-full px-4 py-2 border border-ink-200 rounded-xl focus:ring-brand-500 focus:border-brand-500"
-                        >
-                          <option value="monthly">Monthly</option>
-                          <option value="annual">Annual (Save 15%)</option>
-                        </select>
+                      <div className="bg-ink-50 p-4 rounded-xl border border-ink-200">
+                        <div className="flex justify-between items-center mb-2">
+                          <label className="block text-sm font-medium text-ink-700">Current Plan</label>
+                          <span className="text-xs font-bold text-brand-600 bg-brand-50 px-2 py-1 rounded-md uppercase tracking-wide">
+                            {restaurant?.subscription_status || 'Active'}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-lg font-bold text-ink-900">
+                              {subscriptionPlans.find(p => p.id === restaurant?.subscription_plan_id)?.plan_name || 'Starter'}
+                            </p>
+                            <p className="text-sm text-ink-500 capitalize">
+                              {restaurant?.subscription_billing_cycle || 'monthly'} billing
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                setPaywallModal({ isOpen: true, message: 'Upgrade your plan to access more features.' });
+                            }}
+                            className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-brand-700 transition"
+                          >
+                            Change Plan
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -2939,29 +2939,75 @@ export default function RestaurantDashboard() {
 
                       <button
                         onClick={async () => {
-                          try {
-                            const res = await apiFetch(`/api/restaurants/${id}/settings`, {
-                              method: 'PATCH',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                subscription_plan_id: plan.id,
-                                subscription_billing_cycle: paywallBillingCycle
-                              })
-                            });
-                            if (res.ok) {
-                              setRestaurant((prev: any) => ({
-                                ...prev,
-                                subscription_plan_id: plan.id,
-                                subscription_billing_cycle: paywallBillingCycle
-                              }));
-                              setPaywallModal(null);
-                              showToast(`Successfully upgraded to ${plan.plan_name} plan!`, 'success');
-                            } else {
-                              showToast('Failed to upgrade plan');
+                          const isPayAsYouGo = plan.is_pay_as_you_go === 1;
+                          const amount = paywallBillingCycle === 'annual' && !isPayAsYouGo ? plan.price_annual : plan.price_monthly;
+                          
+                          const upgradeSubscription = async () => {
+                            try {
+                              const res = await apiFetch(`/api/restaurants/${id}/settings`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  subscription_plan_id: plan.id,
+                                  subscription_billing_cycle: paywallBillingCycle
+                                })
+                              });
+                              if (res.ok) {
+                                setRestaurant((prev: any) => ({
+                                  ...prev,
+                                  subscription_plan_id: plan.id,
+                                  subscription_billing_cycle: paywallBillingCycle
+                                }));
+                                setPaywallModal(null);
+                                showToast(`Successfully upgraded to ${plan.plan_name} plan!`, 'success');
+                              } else {
+                                showToast('Failed to upgrade plan');
+                              }
+                            } catch (err) {
+                              console.error('Upgrade error:', err);
+                              showToast('An error occurred during upgrade');
                             }
-                          } catch (err) {
-                            console.error('Upgrade error:', err);
-                            showToast('An error occurred during upgrade');
+                          };
+
+                          if (amount === 0 || isPayAsYouGo) {
+                            upgradeSubscription();
+                            return;
+                          }
+
+                          // If platform has flutterwave, use it for subscription payment
+                          if (restaurant?.platform_flutterwave_enabled && restaurant?.flutterwave_public_key) {
+                            // @ts-ignore
+                            if (window.FlutterwaveCheckout) {
+                              // @ts-ignore
+                              window.FlutterwaveCheckout({
+                                public_key: restaurant.flutterwave_public_key,
+                                tx_ref: `sub-${plan.id}-${Date.now()}`,
+                                amount: amount,
+                                currency: restaurant.currency || 'USD',
+                                payment_options: "card, mobilemoneyghana, ussd",
+                                customer: {
+                                  email: user?.email || 'restaurant@example.com',
+                                  name: restaurant.name || 'Restaurant Owner',
+                                },
+                                customization: {
+                                  title: "Subscription Upgrade",
+                                  description: `Upgrade to ${plan.plan_name} plan (${paywallBillingCycle})`,
+                                  logo: restaurant.logo_url || "https://quickdine.com/logo.png",
+                                },
+                                callback: function (data: any) {
+                                  console.log("Flutterwave payment successful", data);
+                                  upgradeSubscription();
+                                },
+                                onClose: function () {
+                                  // User closed the widget
+                                },
+                              });
+                            } else {
+                              showToast('Payment gateway not loaded.', 'error');
+                            }
+                          } else {
+                            // Offline / placeholder logic if flutterwave is not enabled on platform
+                            upgradeSubscription();
                           }
                         }}
                         disabled={restaurant?.subscription_plan_id === plan.id && restaurant?.subscription_billing_cycle === paywallBillingCycle}
