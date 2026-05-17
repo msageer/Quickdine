@@ -393,6 +393,8 @@ try { await db.exec("ALTER TABLE orders ADD COLUMN payment_method TEXT"); } catc
 try { await db.exec("ALTER TABLE orders ADD COLUMN guest_last_name TEXT"); } catch (e) {}
 try { await db.exec("ALTER TABLE orders ADD COLUMN room_number TEXT"); } catch (e) {}
 try { await db.exec("ALTER TABLE subscription_plans ADD COLUMN max_monthly_gmv REAL DEFAULT 0.0"); } catch (e) {}
+try { await db.exec("ALTER TABLE subscription_plans ADD COLUMN transaction_fee_percentage REAL DEFAULT 0.0"); } catch (e) {}
+try { await db.exec("ALTER TABLE subscription_plans ADD COLUMN is_pay_as_you_go INTEGER DEFAULT 0"); } catch (e) {}
 
 try {
   await db.exec(`CREATE TABLE IF NOT EXISTS order_logs (
@@ -452,11 +454,18 @@ try {
 try {
   const planCount = await db.get("SELECT COUNT(*) as count FROM subscription_plans") as any;
   if (planCount.count === 0) {
-    const insertPlan = db.prepare("INSERT INTO subscription_plans (plan_name, price_monthly, price_annual, max_waiters, max_monthly_orders, analytics_retention_days, can_export_tax_reports, is_vip_featured, can_use_online_payments) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    await insertPlan.run('Starter', 0, 0, 1, 100, 7, 0, 0, 0);
-    await insertPlan.run('Professional', 15000, 150000, 10, 999999, 365, 1, 0, 1);
-    await insertPlan.run('Enterprise', 35000, 350000, 999999, 999999, 365, 1, 1, 1);
+    const insertPlan = db.prepare("INSERT INTO subscription_plans (plan_name, price_monthly, price_annual, max_waiters, max_monthly_orders, analytics_retention_days, can_export_tax_reports, is_vip_featured, can_use_online_payments, transaction_fee_percentage, is_pay_as_you_go) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    await insertPlan.run('Starter', 0, 0, 1, 100, 7, 0, 0, 0, 0, 0);
+    await insertPlan.run('Professional', 15000, 150000, 10, 999999, 365, 1, 0, 1, 0, 0);
+    await insertPlan.run('Enterprise', 35000, 350000, 999999, 999999, 365, 1, 1, 1, 0, 0);
+    await insertPlan.run('Pay As You Go', 0, 0, 999999, 999999, 365, 1, 1, 1, 2.5, 1);
   } else {
+    // Check if Pay As You Go exists
+    const payAsYouGoExists = await db.get("SELECT id FROM subscription_plans WHERE is_pay_as_you_go = 1");
+    if (!payAsYouGoExists) {
+      const insertPlan = db.prepare("INSERT INTO subscription_plans (plan_name, price_monthly, price_annual, max_waiters, max_monthly_orders, analytics_retention_days, can_export_tax_reports, is_vip_featured, can_use_online_payments, transaction_fee_percentage, is_pay_as_you_go) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+      await insertPlan.run('Pay As You Go', 0, 0, 999999, 999999, 365, 1, 1, 1, 2.5, 1);
+    }
     // Update existing plans to match new specs if they haven't been updated
     await db.run("UPDATE subscription_plans SET plan_name = 'Starter', max_waiters = 1, can_use_online_payments = 0 WHERE id = 1");
     await db.run("UPDATE subscription_plans SET plan_name = 'Professional', max_monthly_orders = 999999, can_use_online_payments = 1 WHERE id = 2");
@@ -942,13 +951,13 @@ app.get('/api/admin/plans', authenticateToken, authorizeRole(['admin']), async (
 });
 
 app.post('/api/admin/plans', authenticateToken, authorizeRole(['admin']), async (req, res) => {
-  const { plan_name, price_monthly, price_annual, max_waiters, max_monthly_orders, analytics_retention_days, can_export_tax_reports, is_vip_featured, can_use_online_payments } = req.body;
+  const { plan_name, price_monthly, price_annual, max_waiters, max_monthly_orders, analytics_retention_days, can_export_tax_reports, is_vip_featured, can_use_online_payments, transaction_fee_percentage, is_pay_as_you_go } = req.body;
   
   try {
     const result = await db.run(`
-      INSERT INTO subscription_plans (plan_name, price_monthly, price_annual, max_waiters, max_monthly_orders, analytics_retention_days, can_export_tax_reports, is_vip_featured, can_use_online_payments)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [plan_name, price_monthly, price_annual, max_waiters, max_monthly_orders, analytics_retention_days, can_export_tax_reports ? 1 : 0, is_vip_featured ? 1 : 0, can_use_online_payments ? 1 : 0]);
+      INSERT INTO subscription_plans (plan_name, price_monthly, price_annual, max_waiters, max_monthly_orders, analytics_retention_days, can_export_tax_reports, is_vip_featured, can_use_online_payments, transaction_fee_percentage, is_pay_as_you_go)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [plan_name, price_monthly, price_annual, max_waiters, max_monthly_orders, analytics_retention_days, can_export_tax_reports ? 1 : 0, is_vip_featured ? 1 : 0, can_use_online_payments ? 1 : 0, transaction_fee_percentage || 0, is_pay_as_you_go ? 1 : 0]);
     
     const newPlan = await db.get('SELECT * FROM subscription_plans WHERE id = ?', [result.lastInsertRowid]);
     res.json(newPlan);
@@ -960,14 +969,14 @@ app.post('/api/admin/plans', authenticateToken, authorizeRole(['admin']), async 
 
 app.put('/api/admin/plans/:id', authenticateToken, authorizeRole(['admin']), async (req, res) => {
   const { id } = req.params;
-  const { price_monthly, price_annual, max_waiters, max_monthly_orders, analytics_retention_days, can_export_tax_reports, is_vip_featured, can_use_online_payments } = req.body;
+  const { price_monthly, price_annual, max_waiters, max_monthly_orders, analytics_retention_days, can_export_tax_reports, is_vip_featured, can_use_online_payments, transaction_fee_percentage, is_pay_as_you_go } = req.body;
   
   try {
     await db.run(`
       UPDATE subscription_plans 
-      SET price_monthly = ?, price_annual = ?, max_waiters = ?, max_monthly_orders = ?, analytics_retention_days = ?, can_export_tax_reports = ?, is_vip_featured = ?, can_use_online_payments = ?
+      SET price_monthly = ?, price_annual = ?, max_waiters = ?, max_monthly_orders = ?, analytics_retention_days = ?, can_export_tax_reports = ?, is_vip_featured = ?, can_use_online_payments = ?, transaction_fee_percentage = ?, is_pay_as_you_go = ?
       WHERE id = ?
-    `, [price_monthly, price_annual, max_waiters, max_monthly_orders, analytics_retention_days, can_export_tax_reports ? 1 : 0, is_vip_featured ? 1 : 0, can_use_online_payments ? 1 : 0, id]);
+    `, [price_monthly, price_annual, max_waiters, max_monthly_orders, analytics_retention_days, can_export_tax_reports ? 1 : 0, is_vip_featured ? 1 : 0, can_use_online_payments ? 1 : 0, transaction_fee_percentage || 0, is_pay_as_you_go ? 1 : 0, id]);
     
     res.json({ success: true });
   } catch (error) {
@@ -977,10 +986,25 @@ app.put('/api/admin/plans/:id', authenticateToken, authorizeRole(['admin']), asy
 });
 
 app.patch('/api/admin/settings', authenticateToken, authorizeRole(['admin']), async (req, res) => {
-  const { default_currency, notifications_enabled, payment_paystack_enabled, paystack_public_key, paystack_secret_key, payment_monnify_enabled, monnify_api_key, monnify_secret_key, monnify_contract_code, payment_flutterwave_enabled, flutterwave_public_key, flutterwave_secret_key, simulate_order_enabled } = req.body;
+  const { default_currency, notifications_enabled, payment_paystack_enabled, paystack_public_key, paystack_secret_key, payment_monnify_enabled, monnify_api_key, monnify_secret_key, monnify_contract_code, payment_flutterwave_enabled, flutterwave_public_key, flutterwave_secret_key, simulate_order_enabled, global_copyright_footer } = req.body;
   
-  const updates = ['default_currency = ?', 'notifications_enabled = ?'];
-  const values = [default_currency, notifications_enabled ? 1 : 0];
+  const updates: string[] = [];
+  const values: any[] = [];
+  
+  if (default_currency !== undefined) {
+    updates.push('default_currency = ?');
+    values.push(default_currency);
+  }
+  
+  if (notifications_enabled !== undefined) {
+    updates.push('notifications_enabled = ?');
+    values.push(notifications_enabled ? 1 : 0);
+  }
+  
+  if (global_copyright_footer !== undefined) {
+    updates.push('global_copyright_footer = ?');
+    values.push(global_copyright_footer);
+  }
   
   if (simulate_order_enabled !== undefined) {
     updates.push('simulate_order_enabled = ?');
@@ -1353,8 +1377,15 @@ app.patch('/api/restaurants/:id/settings', authenticateToken, requireRestaurantA
     tax_rate,
     payment_cash_enabled,
     payment_paystack_enabled,
+    paystack_public_key,
+    paystack_secret_key,
     payment_monnify_enabled,
+    monnify_api_key,
+    monnify_secret_key,
+    monnify_contract_code,
     payment_flutterwave_enabled,
+    flutterwave_public_key,
+    flutterwave_secret_key,
     account_number,
     bank_name,
     account_name,
@@ -1470,15 +1501,43 @@ app.patch('/api/restaurants/:id/settings', authenticateToken, requireRestaurantA
       updates.push("payment_paystack_enabled = ?");
       values.push(payment_paystack_enabled ? 1 : 0);
     }
+    if (paystack_public_key !== undefined) {
+      updates.push("paystack_public_key = ?");
+      values.push(paystack_public_key);
+    }
+    if (paystack_secret_key !== undefined) {
+      updates.push("paystack_secret_key = ?");
+      values.push(paystack_secret_key);
+    }
 
     if (payment_monnify_enabled !== undefined) {
       updates.push("payment_monnify_enabled = ?");
       values.push(payment_monnify_enabled ? 1 : 0);
     }
+    if (monnify_api_key !== undefined) {
+      updates.push("monnify_api_key = ?");
+      values.push(monnify_api_key);
+    }
+    if (monnify_secret_key !== undefined) {
+      updates.push("monnify_secret_key = ?");
+      values.push(monnify_secret_key);
+    }
+    if (monnify_contract_code !== undefined) {
+      updates.push("monnify_contract_code = ?");
+      values.push(monnify_contract_code);
+    }
 
     if (payment_flutterwave_enabled !== undefined) {
       updates.push("payment_flutterwave_enabled = ?");
       values.push(payment_flutterwave_enabled ? 1 : 0);
+    }
+    if (flutterwave_public_key !== undefined) {
+      updates.push("flutterwave_public_key = ?");
+      values.push(flutterwave_public_key);
+    }
+    if (flutterwave_secret_key !== undefined) {
+      updates.push("flutterwave_secret_key = ?");
+      values.push(flutterwave_secret_key);
     }
 
     const currentRestaurant = await db.get('SELECT account_number, bank_name, account_name FROM restaurants WHERE id = ?', [restaurant_id]) as any;

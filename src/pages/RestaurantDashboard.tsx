@@ -2887,13 +2887,17 @@ export default function RestaurantDashboard() {
                       <div className="mb-4">
                         <h4 className="text-lg font-bold text-ink-900">{plan.plan_name}</h4>
                         <div className="mt-2 flex items-baseline gap-1">
-                          <span className="text-3xl font-bold text-ink-900">
-                            {getCurrencySymbol(restaurant?.currency || 'USD')}
-                            {paywallBillingCycle === 'annual' ? (plan.price_annual / 12).toLocaleString() : plan.price_monthly.toLocaleString()}
-                          </span>
-                          <span className="text-ink-500 text-sm">/mo</span>
+                          {plan.is_pay_as_you_go === 1 ? (
+                            <span className="text-3xl font-bold text-ink-900">{plan.transaction_fee_percentage}%</span>
+                          ) : (
+                            <span className="text-3xl font-bold text-ink-900">
+                              {getCurrencySymbol(restaurant?.currency || 'USD')}
+                              {paywallBillingCycle === 'annual' ? (plan.price_annual / 12).toLocaleString() : plan.price_monthly.toLocaleString()}
+                            </span>
+                          )}
+                          <span className="text-ink-500 text-sm">{plan.is_pay_as_you_go === 1 ? '/transaction' : '/mo'}</span>
                         </div>
-                        {paywallBillingCycle === 'annual' && plan.price_annual > 0 && (
+                        {paywallBillingCycle === 'annual' && plan.price_annual > 0 && plan.is_pay_as_you_go !== 1 && (
                           <p className="text-sm text-brand-600 font-medium mt-1">
                             Billed {getCurrencySymbol(restaurant?.currency || 'USD')}{plan.price_annual.toLocaleString()} yearly
                           </p>

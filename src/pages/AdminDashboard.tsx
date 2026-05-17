@@ -23,7 +23,9 @@ export default function AdminDashboard() {
     analytics_retention_days: 7,
     can_export_tax_reports: 0,
     is_vip_featured: 0,
-    can_use_online_payments: 0
+    can_use_online_payments: 0,
+    transaction_fee_percentage: 0,
+    is_pay_as_you_go: 0
   });
   const [analytics, setAnalytics] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
@@ -1341,6 +1343,30 @@ export default function AdminDashboard() {
                         />
                       </div>
                       <div>
+                        <label className="block text-sm font-medium text-ink-700 mb-1">Transaction Fee % (if Pay-As-You-Go)</label>
+                        <input 
+                          type="number" 
+                          step="0.01"
+                          value={plan.transaction_fee_percentage ?? ''} 
+                          onChange={(e) => {
+                            const newPlans = [...plans];
+                            const index = newPlans.findIndex(p => p.id === plan.id);
+                            newPlans[index].transaction_fee_percentage = parseFloat(e.target.value) || 0;
+                            setPlans(newPlans);
+                          }}
+                          className="w-full px-3 py-2 border border-ink-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                        />
+                      </div>
+                      <label className="flex items-center space-x-3 mt-4">
+                        <input type="checkbox" checked={plan.is_pay_as_you_go === 1} onChange={(e) => {
+                          const newPlans = [...plans];
+                          const index = newPlans.findIndex(p => p.id === plan.id);
+                          newPlans[index].is_pay_as_you_go = e.target.checked ? 1 : 0;
+                          setPlans(newPlans);
+                        }} className="rounded text-brand-600 focus:ring-brand-500 w-5 h-5" />
+                        <span className="text-sm font-medium text-ink-700">Is Pay As You Go Plan</span>
+                      </label>
+                      <div>
                         <label className="block text-sm font-medium text-ink-700 mb-1">Max Waiters</label>
                         <input 
                           type="number" 
@@ -1603,7 +1629,7 @@ export default function AdminDashboard() {
                     setPlans([...plans, createdPlan]);
                     setIsAddPlanModalOpen(false);
                     setNewPlan({
-                      plan_name: '', price_monthly: 0, price_annual: 0, max_waiters: 1, max_monthly_orders: 100, analytics_retention_days: 7, can_export_tax_reports: 0, is_vip_featured: 0, can_use_online_payments: 0
+                      plan_name: '', price_monthly: 0, price_annual: 0, max_waiters: 1, max_monthly_orders: 100, analytics_retention_days: 7, can_export_tax_reports: 0, is_vip_featured: 0, can_use_online_payments: 0, transaction_fee_percentage: 0, is_pay_as_you_go: 0
                     });
                     alert('Plan created successfully');
                   } else {
@@ -1641,6 +1667,19 @@ export default function AdminDashboard() {
                       className="w-full px-4 py-2 border border-ink-200 rounded-xl focus:ring-brand-500 focus:border-brand-500"
                     />
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-ink-700 mb-1">Transaction Fee %</label>
+                    <input 
+                      type="number" step="0.01" min="0" required
+                      value={newPlan.transaction_fee_percentage || ""}
+                      onChange={(e) => setNewPlan({...newPlan, transaction_fee_percentage: parseFloat(e.target.value) || 0})}
+                      className="w-full px-4 py-2 border border-ink-200 rounded-xl focus:ring-brand-500 focus:border-brand-500"
+                    />
+                  </div>
+                  <label className="flex items-center space-x-3 mt-4">
+                    <input type="checkbox" checked={newPlan.is_pay_as_you_go === 1} onChange={(e) => setNewPlan({...newPlan, is_pay_as_you_go: e.target.checked ? 1 : 0})} className="rounded text-brand-600 focus:ring-brand-500 w-5 h-5" />
+                    <span className="text-sm font-medium text-ink-700">Is Pay As You Go</span>
+                  </label>
                   <div>
                     <label className="block text-sm font-medium text-ink-700 mb-1">Max Waiters</label>
                     <input 
