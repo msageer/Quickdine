@@ -248,49 +248,104 @@ await db.exec(`
 `);
 
 // Seed initial data if empty
-try {
-  await db.exec("ALTER TABLE restaurants ADD COLUMN status TEXT DEFAULT 'Pending'");
-} catch (e) {
-  // Column might already exist
-}
+const alterQueries = [
+  "ALTER TABLE restaurants ADD COLUMN status TEXT DEFAULT 'Pending'",
+  "ALTER TABLE orders ADD COLUMN customer_email TEXT",
+  "ALTER TABLE orders ADD COLUMN customer_name TEXT",
+  "ALTER TABLE orders ADD COLUMN customer_address TEXT",
+  "ALTER TABLE orders ADD COLUMN special_instructions TEXT",
+  "ALTER TABLE orders ADD COLUMN order_number TEXT",
+  "ALTER TABLE restaurants ADD COLUMN waiter_allocation_enabled INTEGER DEFAULT 0",
+  "ALTER TABLE orders ADD COLUMN waiter_id INTEGER REFERENCES users(id)",
+  "ALTER TABLE restaurants ADD COLUMN logo_url TEXT",
+  "ALTER TABLE restaurants ADD COLUMN description TEXT",
+  "ALTER TABLE restaurants ADD COLUMN address TEXT",
+  "ALTER TABLE restaurants ADD COLUMN phone TEXT",
+  "ALTER TABLE restaurants ADD COLUMN email TEXT",
+  "ALTER TABLE restaurants ADD COLUMN currency TEXT DEFAULT 'USD'",
+  "ALTER TABLE restaurants ADD COLUMN tax_rate REAL DEFAULT 0.0",
+  "ALTER TABLE restaurants ADD COLUMN payment_cash_enabled INTEGER DEFAULT 1",
+  "ALTER TABLE restaurants ADD COLUMN payment_paystack_enabled INTEGER DEFAULT 0",
+  "ALTER TABLE restaurants ADD COLUMN paystack_public_key TEXT",
+  "ALTER TABLE restaurants ADD COLUMN paystack_secret_key TEXT",
+  "ALTER TABLE restaurants ADD COLUMN operating_hours TEXT",
+  "ALTER TABLE platform_settings ADD COLUMN payment_paystack_enabled INTEGER DEFAULT 0",
+  "ALTER TABLE platform_settings ADD COLUMN paystack_public_key TEXT",
+  "ALTER TABLE platform_settings ADD COLUMN paystack_secret_key TEXT",
+  "ALTER TABLE platform_settings ADD COLUMN payment_monnify_enabled INTEGER DEFAULT 0",
+  "ALTER TABLE platform_settings ADD COLUMN monnify_api_key TEXT",
+  "ALTER TABLE platform_settings ADD COLUMN monnify_secret_key TEXT",
+  "ALTER TABLE platform_settings ADD COLUMN monnify_contract_code TEXT",
+  "ALTER TABLE platform_settings ADD COLUMN payment_flutterwave_enabled INTEGER DEFAULT 0",
+  "ALTER TABLE platform_settings ADD COLUMN flutterwave_public_key TEXT",
+  "ALTER TABLE platform_settings ADD COLUMN flutterwave_secret_key TEXT",
+  "ALTER TABLE restaurants ADD COLUMN account_number TEXT",
+  "ALTER TABLE restaurants ADD COLUMN bank_name TEXT",
+  "ALTER TABLE restaurants ADD COLUMN account_name TEXT",
+  "ALTER TABLE restaurants ADD COLUMN account_verified INTEGER DEFAULT 0",
+  "ALTER TABLE restaurants ADD COLUMN payment_monnify_enabled INTEGER DEFAULT 0",
+  "ALTER TABLE restaurants ADD COLUMN slug TEXT UNIQUE",
+  "ALTER TABLE restaurants ADD COLUMN monnify_api_key TEXT",
+  "ALTER TABLE restaurants ADD COLUMN monnify_secret_key TEXT",
+  "ALTER TABLE restaurants ADD COLUMN monnify_contract_code TEXT",
+  "ALTER TABLE restaurants ADD COLUMN payment_flutterwave_enabled INTEGER DEFAULT 0",
+  "ALTER TABLE restaurants ADD COLUMN flutterwave_public_key TEXT",
+  "ALTER TABLE restaurants ADD COLUMN flutterwave_secret_key TEXT",
+  "ALTER TABLE tables ADD COLUMN address TEXT",
+  "ALTER TABLE tables ADD COLUMN is_room INTEGER DEFAULT 0",
+  "ALTER TABLE users ADD COLUMN name TEXT",
+  "ALTER TABLE orders ADD COLUMN payment_method TEXT DEFAULT 'Cash'",
+  "ALTER TABLE orders ADD COLUMN payment_status TEXT DEFAULT 'Pending'",
+  "ALTER TABLE orders ADD COLUMN paystack_reference TEXT",
+  "ALTER TABLE orders ADD COLUMN monnify_reference TEXT",
+  "ALTER TABLE orders ADD COLUMN flutterwave_reference TEXT",
+  "ALTER TABLE restaurants ADD COLUMN business_type TEXT DEFAULT 'restaurant'",
+  "ALTER TABLE orders ADD COLUMN tip_amount REAL DEFAULT 0.0",
+  "ALTER TABLE menu_items ADD COLUMN dietary_badges TEXT",
+  "ALTER TABLE menu_items ADD COLUMN modifiers TEXT",
+  "ALTER TABLE order_items ADD COLUMN notes TEXT",
+  "ALTER TABLE order_items ADD COLUMN modifiers TEXT",
+  "ALTER TABLE subscription_plans ADD COLUMN can_use_online_payments INTEGER DEFAULT 0",
+  "ALTER TABLE restaurants ADD COLUMN tin_number TEXT",
+  "ALTER TABLE restaurants ADD COLUMN is_hotel INTEGER DEFAULT 0",
+  "ALTER TABLE menu_items ADD COLUMN cogs REAL DEFAULT 0.0",
+  "ALTER TABLE orders ADD COLUMN subtotal REAL DEFAULT 0.0",
+  "ALTER TABLE orders ADD COLUMN vat_amount REAL DEFAULT 0.0",
+  "ALTER TABLE orders ADD COLUMN state_tax_amount REAL DEFAULT 0.0",
+  "ALTER TABLE orders ADD COLUMN service_charge REAL DEFAULT 0.0",
+  "ALTER TABLE orders ADD COLUMN net_total REAL DEFAULT 0.0",
+  "ALTER TABLE orders ADD COLUMN payment_method TEXT",
+  "ALTER TABLE orders ADD COLUMN guest_last_name TEXT",
+  "ALTER TABLE orders ADD COLUMN room_number TEXT",
+  "ALTER TABLE subscription_plans ADD COLUMN max_monthly_gmv REAL DEFAULT 0.0",
+  "ALTER TABLE restaurants ADD COLUMN subscription_plan_id INTEGER DEFAULT 1",
+  "ALTER TABLE restaurants ADD COLUMN subscription_status TEXT DEFAULT 'Active'",
+  "ALTER TABLE restaurants ADD COLUMN subscription_billing_cycle TEXT DEFAULT 'monthly'",
+  "ALTER TABLE restaurants ADD COLUMN subscription_expiry_date TEXT",
+  "ALTER TABLE restaurants ADD COLUMN vat_rate REAL DEFAULT 0",
+  "ALTER TABLE restaurants ADD COLUMN state_tax_rate REAL DEFAULT 0",
+  "ALTER TABLE restaurants ADD COLUMN is_tax_inclusive INTEGER DEFAULT 0",
+  "ALTER TABLE restaurants ADD COLUMN receipt_footer TEXT",
+  "ALTER TABLE orders ADD COLUMN gross_total REAL DEFAULT 0",
+  "ALTER TABLE orders ADD COLUMN net_total REAL DEFAULT 0",
+  "ALTER TABLE orders ADD COLUMN vat_amount REAL DEFAULT 0",
+  "ALTER TABLE orders ADD COLUMN state_tax_amount REAL DEFAULT 0",
+  "ALTER TABLE orders ADD COLUMN discount_amount REAL DEFAULT 0",
+  "ALTER TABLE orders ADD COLUMN discount_reason TEXT",
+  "ALTER TABLE users ADD COLUMN phone_number TEXT",
+  "ALTER TABLE users ADD COLUMN pin TEXT",
+  "ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0",
+  "ALTER TABLE users ADD COLUMN phone_verified INTEGER DEFAULT 0",
+  "ALTER TABLE users ADD COLUMN otp_code TEXT",
+  "ALTER TABLE users ADD COLUMN otp_expires_at DATETIME",
+  "ALTER TABLE users ADD COLUMN verification_token TEXT",
+  "ALTER TABLE users ADD COLUMN verification_expires DATETIME",
+  "ALTER TABLE platform_settings ADD COLUMN global_copyright_footer TEXT DEFAULT 'Powered by QuickDine'",
+  "ALTER TABLE platform_settings ADD COLUMN simulate_order_enabled INTEGER DEFAULT 0"
+];
 
-try { await db.exec("ALTER TABLE orders ADD COLUMN customer_email TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE orders ADD COLUMN customer_name TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE orders ADD COLUMN customer_address TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE orders ADD COLUMN special_instructions TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE orders ADD COLUMN order_number TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE restaurants ADD COLUMN waiter_allocation_enabled INTEGER DEFAULT 0"); } catch (e) {}
-try { await db.exec("ALTER TABLE orders ADD COLUMN waiter_id INTEGER REFERENCES users(id)"); } catch (e) {}
-try { await db.exec("ALTER TABLE restaurants ADD COLUMN logo_url TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE restaurants ADD COLUMN description TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE restaurants ADD COLUMN address TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE restaurants ADD COLUMN phone TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE restaurants ADD COLUMN email TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE restaurants ADD COLUMN currency TEXT DEFAULT 'USD'"); } catch (e) {}
-try { await db.exec("ALTER TABLE restaurants ADD COLUMN tax_rate REAL DEFAULT 0.0"); } catch (e) {}
-try { await db.exec("ALTER TABLE restaurants ADD COLUMN payment_cash_enabled INTEGER DEFAULT 1"); } catch (e) {}
-try { await db.exec("ALTER TABLE restaurants ADD COLUMN payment_paystack_enabled INTEGER DEFAULT 0"); } catch (e) {}
-try { await db.exec("ALTER TABLE restaurants ADD COLUMN paystack_public_key TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE restaurants ADD COLUMN paystack_secret_key TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE restaurants ADD COLUMN operating_hours TEXT"); } catch (e) {}
-
-try { await db.exec("ALTER TABLE platform_settings ADD COLUMN payment_paystack_enabled INTEGER DEFAULT 0"); } catch (e) {}
-try { await db.exec("ALTER TABLE platform_settings ADD COLUMN paystack_public_key TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE platform_settings ADD COLUMN paystack_secret_key TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE platform_settings ADD COLUMN payment_monnify_enabled INTEGER DEFAULT 0"); } catch (e) {}
-try { await db.exec("ALTER TABLE platform_settings ADD COLUMN monnify_api_key TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE platform_settings ADD COLUMN monnify_secret_key TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE platform_settings ADD COLUMN monnify_contract_code TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE platform_settings ADD COLUMN payment_flutterwave_enabled INTEGER DEFAULT 0"); } catch (e) {}
-try { await db.exec("ALTER TABLE platform_settings ADD COLUMN flutterwave_public_key TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE platform_settings ADD COLUMN flutterwave_secret_key TEXT"); } catch (e) {}
-
-try { await db.exec("ALTER TABLE restaurants ADD COLUMN account_number TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE restaurants ADD COLUMN bank_name TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE restaurants ADD COLUMN account_name TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE restaurants ADD COLUMN account_verified INTEGER DEFAULT 0"); } catch (e) {}
-try { await db.exec("ALTER TABLE restaurants ADD COLUMN payment_monnify_enabled INTEGER DEFAULT 0"); } catch (e) {}
-try { await db.exec("ALTER TABLE restaurants ADD COLUMN slug TEXT UNIQUE"); } catch (e) {}
+const alterPromises = alterQueries.map(q => db.exec(q).catch(() => {}));
+await Promise.all(alterPromises);
 
 // Backfill slugs
 try {
@@ -301,30 +356,6 @@ try {
     await updateSlug.run(slug, r.id);
   }
 } catch (e) {}
-try { await db.exec("ALTER TABLE restaurants ADD COLUMN monnify_api_key TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE restaurants ADD COLUMN monnify_secret_key TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE restaurants ADD COLUMN monnify_contract_code TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE restaurants ADD COLUMN payment_flutterwave_enabled INTEGER DEFAULT 0"); } catch (e) {}
-try { await db.exec("ALTER TABLE restaurants ADD COLUMN flutterwave_public_key TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE restaurants ADD COLUMN flutterwave_secret_key TEXT"); } catch (e) {}
-
-try { await db.exec("ALTER TABLE tables ADD COLUMN address TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE tables ADD COLUMN is_room INTEGER DEFAULT 0"); } catch (e) {}
-
-try { await db.exec("ALTER TABLE users ADD COLUMN name TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE orders ADD COLUMN payment_method TEXT DEFAULT 'Cash'"); } catch (e) {}
-try { await db.exec("ALTER TABLE orders ADD COLUMN payment_status TEXT DEFAULT 'Pending'"); } catch (e) {}
-try { await db.exec("ALTER TABLE orders ADD COLUMN paystack_reference TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE orders ADD COLUMN monnify_reference TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE orders ADD COLUMN flutterwave_reference TEXT"); } catch (e) {}
-
-try { await db.exec("ALTER TABLE restaurants ADD COLUMN business_type TEXT DEFAULT 'restaurant'"); } catch (e) {}
-
-try { await db.exec("ALTER TABLE orders ADD COLUMN tip_amount REAL DEFAULT 0.0"); } catch (e) {}
-try { await db.exec("ALTER TABLE menu_items ADD COLUMN dietary_badges TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE menu_items ADD COLUMN modifiers TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE order_items ADD COLUMN notes TEXT"); } catch (e) {}
-try { await db.exec("ALTER TABLE order_items ADD COLUMN modifiers TEXT"); } catch (e) {}
 
 // --- NEW SCHEMA UPDATES FOR TIER ENGINE & TAX READINESS ---
 try { 
@@ -523,8 +554,13 @@ if (count.count === 0) {
 app.use(async (req, res, next) => {
   if (!isInitialized) {
     if (!initPromise) initPromise = initializeDatabase();
-    await initPromise;
-    isInitialized = true;
+    try {
+      await initPromise;
+      isInitialized = true;
+    } catch (e) {
+      initPromise = null; // allow retry
+      return next(e);
+    }
   }
   next();
 });
@@ -575,6 +611,11 @@ app.post('/api/auth/signup', async (req, res) => {
   const { email, password, restaurantName, businessType } = req.body;
   
   try {
+    const existing = await db.get('SELECT id FROM users WHERE email = ?', [email]);
+    if (existing) {
+      return res.status(400).json({ error: 'Email already exists.' });
+    }
+
     const settings = await db.get('SELECT default_currency FROM platform_settings LIMIT 1') as any;
     const defaultCurrency = settings ? settings.default_currency : 'USD';
 
@@ -601,7 +642,7 @@ app.post('/api/auth/signup', async (req, res) => {
       return resId;
     });
     
-    const resId = transaction();
+    const resId = await transaction();
     
     const verificationUrl = `${process.env.APP_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}`;
     const emailHtml = `
@@ -1130,7 +1171,7 @@ app.post('/api/restaurants/:id/menu/bulk', authenticateToken, requireRestaurantA
       }
     });
 
-    transaction();
+    await transaction();
     res.json({ success: true });
   } catch (err: any) {
     console.error('Bulk upload error:', err);
@@ -1276,7 +1317,7 @@ app.post('/api/restaurants/:id/waiters', authenticateToken, requireRestaurantAcc
     const newWaiter = await db.get("SELECT id, name, email, phone_number, restaurant_id FROM users WHERE id = ?", [result.lastInsertRowid]);
     res.json(newWaiter);
   } catch (error: any) {
-    if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+    if (error.code === 'SQLITE_CONSTRAINT_UNIQUE' || (error.code === '23505') || (error.message && error.message.includes('duplicate key'))) {
       return res.status(400).json({ error: 'Email or phone number already exists' });
     }
     res.status(500).json({ error: 'Failed to add waiter' });
@@ -1505,7 +1546,7 @@ app.post('/api/admin/restaurants', authenticateToken, authorizeRole(['admin']), 
       return resId;
     });
     
-    transaction();
+    await transaction();
     res.json({ success: true, message: 'Restaurant created successfully' });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to create restaurant' });
@@ -1547,7 +1588,7 @@ app.delete('/api/admin/restaurants/:id', authenticateToken, authorizeRole(['admi
       return result;
     });
     
-    const result = transaction();
+    const result = await transaction();
     
     // @ts-ignore
     if (result.changes > 0) {
@@ -1942,7 +1983,7 @@ app.post('/api/orders', async (req, res) => {
   });
   
   try {
-    const orderId = transaction();
+    const orderId = await transaction();
     const newOrder = await db.get(`
       SELECT o.*, t.table_number 
       FROM orders o 

@@ -19,7 +19,8 @@ if (connectionString) {
 }
 
 const pool = new Pool({
-  connectionString
+  connectionString,
+  ...(connectionString ? { ssl: { rejectUnauthorized: false } } : {})
 });
 
 
