@@ -1,6 +1,9 @@
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+
+// Prevent self-signed cert issues on Vercel
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { Resend } from 'resend';
@@ -21,6 +24,9 @@ const mailTransporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.ethereal.email',
   port: parseInt(process.env.SMTP_PORT || '587'),
   secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
+  tls: {
+    rejectUnauthorized: false
+  },
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,

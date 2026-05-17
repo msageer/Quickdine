@@ -16,11 +16,14 @@ if (connectionString) {
       connectionString = connectionString.substring(0, protocolEnd) + username + ':' + encodeURIComponent(decodedPassword) + connectionString.substring(lastAt);
     }
   }
+  // Strip any sslmode query params which could force cert verification
+  connectionString = connectionString.replace(/\?sslmode=[^&]+/, '');
+  connectionString = connectionString.replace(/&sslmode=[^&]+/, '');
 }
 
 const pool = new Pool({
   connectionString,
-  ...(connectionString ? { ssl: { rejectUnauthorized: false } } : {})
+  ssl: { rejectUnauthorized: false }
 });
 
 
