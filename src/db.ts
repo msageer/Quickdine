@@ -3,22 +3,20 @@ import path from 'path';
 
 let connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
 if (connectionString) {
-  const lastAt = connectionString.lastIndexOf('@');
-  if (lastAt !== -1) {
-    const protocolEnd = connectionString.indexOf('://') + 3;
-    const authPart = connectionString.substring(protocolEnd, lastAt);
-    const firstColon = authPart.indexOf(':');
-    if (firstColon !== -1) {
-      const username = authPart.substring(0, firstColon);
-      const password = authPart.substring(firstColon + 1);
-      let decodedPassword = password;
-      try { decodedPassword = decodeURIComponent(password); } catch(e) {}
-      connectionString = connectionString.substring(0, protocolEnd) + username + ':' + encodeURIComponent(decodedPassword) + connectionString.substring(lastAt);
+  try {
+    const url = new URL(connectionString);
+    if (url.password) {
+      // Re-encode password properly if needed
+      url.password = encodeURIComponent(decodeURIComponent(url.password));
     }
+    url.searchParams.delete('sslmode');
+    connectionString = url.toString();
+  } catch (e) {
+    // fallback to regex if URL parse fails
+    connectionString = connectionString.replace(/\?sslmode=[^&]+&?/, '?');
+    connectionString = connectionString.replace(/&sslmode=[^&]+/, '');
+    connectionString = connectionString.replace(/\?$/, ''); // clean trailing ?
   }
-  // Strip any sslmode query params which could force cert verification
-  connectionString = connectionString.replace(/\?sslmode=[^&]+/, '');
-  connectionString = connectionString.replace(/&sslmode=[^&]+/, '');
 }
 
 const pool = new Pool({
