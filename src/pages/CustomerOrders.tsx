@@ -14,6 +14,7 @@ export default function CustomerOrders() {
   const [error, setError] = useState('');
   const [expandedOrder, setExpandedOrder] = useState<number | null>(null);
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+  const [inputEmail, setInputEmail] = useState('');
 
   const showToast = (message: string, type: 'success' | 'error' = 'error') => {
     setToast({ message, type });
@@ -33,7 +34,7 @@ export default function CustomerOrders() {
     }
   };
 
-  const customerEmail = localStorage.getItem('customerEmail');
+  const [customerEmail, setCustomerEmail] = useState<string | null>(localStorage.getItem('customerEmail'));
 
   useEffect(() => {
     if (!customerEmail) {
@@ -107,11 +108,34 @@ export default function CustomerOrders() {
       <div className="min-h-screen bg-ink-50 flex flex-col items-center justify-center p-4">
         <div className="bg-white p-8 rounded-3xl shadow-lg max-w-md w-full text-center">
           <Receipt className="w-16 h-16 text-ink-300 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-ink-900 mb-2 font-serif">No Email Found</h2>
-          <p className="text-ink-500 mb-6">We couldn't find an email associated with your device. Please place an order and provide your email to view your order history.</p>
+          <h2 className="text-2xl font-bold text-ink-900 mb-2 font-serif">View Your Profile</h2>
+          <p className="text-ink-500 mb-6">Enter your email address to view your order history and profile.</p>
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            if (inputEmail) {
+              localStorage.setItem('customerEmail', inputEmail);
+              setCustomerEmail(inputEmail);
+              setLoading(true);
+            }
+          }}>
+            <input 
+              type="email" 
+              required
+              value={inputEmail}
+              onChange={(e) => setInputEmail(e.target.value)}
+              placeholder="your@email.com"
+              className="w-full px-4 py-3 border border-ink-200 rounded-xl focus:ring-brand-500 focus:border-brand-500 text-ink-900 bg-white mb-4"
+            />
+            <button 
+              type="submit"
+              className="w-full bg-brand-600 text-white py-3 rounded-xl font-medium hover:bg-brand-700 transition-colors mb-3"
+            >
+              View Profile
+            </button>
+          </form>
           <button 
             onClick={() => navigate(-1)}
-            className="w-full bg-ink-900 text-white py-3 rounded-xl font-medium hover:bg-ink-800 transition-colors"
+            className="w-full bg-ink-100 text-ink-700 py-3 rounded-xl font-medium hover:bg-ink-200 transition-colors"
           >
             Go Back
           </button>
@@ -125,17 +149,28 @@ export default function CustomerOrders() {
   return (
     <div className="min-h-screen bg-ink-50 flex flex-col">
       <div className="bg-white border-b border-ink-200 sticky top-0 z-10">
-        <div className="max-w-3xl mx-auto px-4 h-16 flex items-center">
-          <button 
-            onClick={() => navigate(-1)}
-            className="p-2 -ml-2 mr-2 text-ink-600 hover:bg-ink-50 rounded-full transition-colors"
-          >
-            <ArrowLeft className="w-6 h-6" />
-          </button>
-          <div>
-            <h1 className="text-lg font-bold text-ink-900 font-serif">Your Orders</h1>
-            <p className="text-xs text-ink-500">{customerEmail}</p>
+        <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
+          <div className="flex items-center">
+            <button 
+              onClick={() => navigate(-1)}
+              className="p-2 -ml-2 mr-2 text-ink-600 hover:bg-ink-50 rounded-full transition-colors"
+            >
+              <ArrowLeft className="w-6 h-6" />
+            </button>
+            <div>
+              <h1 className="text-lg font-bold text-ink-900 font-serif">Your Profile</h1>
+              <p className="text-xs text-ink-500">{customerEmail}</p>
+            </div>
           </div>
+          <button 
+            onClick={() => {
+              localStorage.removeItem('customerEmail');
+              setCustomerEmail(null);
+            }}
+            className="text-sm font-medium text-red-600 hover:text-red-700 bg-red-50 px-3 py-1.5 rounded-lg"
+          >
+            Clear Profile
+          </button>
         </div>
       </div>
 

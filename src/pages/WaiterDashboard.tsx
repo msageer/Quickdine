@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { format } from 'date-fns';
-import { ChefHat, CheckCircle, Clock, UtensilsCrossed, LogOut, Banknote, CreditCard, Plus, MapPin } from 'lucide-react';
+import { ChefHat, CheckCircle, Clock, UtensilsCrossed, LogOut, Banknote, CreditCard, Plus, MapPin, BellRing, CheckCircle2 } from 'lucide-react';
 import { fetchWithRetry, apiFetch } from '../lib/utils';
 
 export default function WaiterDashboard() {
@@ -12,6 +12,7 @@ export default function WaiterDashboard() {
   const [orderItems, setOrderItems] = useState<any[]>([]);
   const [restaurant, setRestaurant] = useState<any>(null);
   const [tables, setTables] = useState<any[]>([]);
+  const [waiterCalls, setWaiterCalls] = useState<any[]>([]);
   const [user, setUser] = useState<any>(null);
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
   const [activeTab, setActiveTab] = useState<'pending' | 'preparing' | 'ready' | 'completed' | 'tables'>('pending');
@@ -44,10 +45,11 @@ export default function WaiterDashboard() {
         const results = await Promise.allSettled([
           fetchWithRetry(`/api/restaurants/${id}`),
           fetchWithRetry(`/api/restaurants/${id}/orders`),
-          fetchWithRetry(`/api/restaurants/${id}/tables`)
+          fetchWithRetry(`/api/restaurants/${id}/tables`),
+          fetchWithRetry(`/api/restaurants/${id}/waiter-calls`)
         ]);
         
-        const [resRes, ordersRes, tablesRes] = results;
+        const [resRes, ordersRes, tablesRes, callsRes] = results;
         
         if (resRes.status === 'fulfilled' && resRes.value.ok) setRestaurant(await resRes.value.json());
         if (ordersRes.status === 'fulfilled' && ordersRes.value.ok) {
@@ -57,6 +59,9 @@ export default function WaiterDashboard() {
         }
         if (tablesRes.status === 'fulfilled' && tablesRes.value.ok) {
           setTables(await tablesRes.value.json());
+        }
+        if (callsRes.status === 'fulfilled' && callsRes.value.ok) {
+          setWaiterCalls(await callsRes.value.json());
         }
       } catch (err) {
         console.error('Failed to fetch dashboard data', err);
@@ -72,6 +77,15 @@ export default function WaiterDashboard() {
       setOrders(prev => [data.order, ...prev]);
       setOrderItems(prev => [...data.items, ...prev]);
       showToast(`New order #${data.order.order_number} received!`, 'success');
+    });
+
+    socket.on('new_waiter_call', (call) => {
+      setWaiterCalls(prev => [...prev, call]);
+      showToast(`Waiter called to ${call.is_room ? 'Room' : 'Table'} ${call.table_number || call.table_id}!`, 'success');
+    });
+
+    socket.on('waiter_call_resolved', (callId) => {
+      setWaiterCalls(prev => prev.filter(c => c.id !== callId));
     });
 
     socket.on('order_status_update', ({ orderId, status }) => {
@@ -130,6 +144,20 @@ export default function WaiterDashboard() {
     navigate('/login');
   };
 
+  const resolveWaiterCall = async (callId: number) => {
+    try {
+      const res = await apiFetch(`/api/waiter-calls/${callId}/resolve`, {
+        method: 'PUT'
+      });
+      if (res.ok) {
+        setWaiterCalls(prev => prev.filter(c => c.id !== callId));
+        showToast('Call resolved successfully', 'success');
+      }
+    } catch (err) {
+      console.error('Failed to resolve waiter call', err);
+    }
+  };
+
   if (!user || !restaurant) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   }
@@ -185,6 +213,29 @@ export default function WaiterDashboard() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-24 md:pb-8">
         
+        {/* Waiter Calls */}
+        {waiterCalls.length > 0 && (
+          <div className="mb-6 space-y-2">
+            {waiterCalls.map(call => (
+              <div key={call.id} className="bg-red-50 border border-red-200 p-4 rounded-xl flex items-center justify-between shadow-sm animate-in slide-in-from-top-2">
+                <div className="flex items-center gap-4">
+                  <div className="bg-red-100 p-2.5 rounded-xl">
+                    <BellRing className="w-6 h-6 text-red-600 animate-pulse" />
+                  </div>
+                  <div>
+                     <p className="font-bold text-red-900 text-lg">Waiter requested at {call.table_number ? `Table ${call.table_number}` : 'a table'}</p>
+                     <p className="font-medium text-red-700">{format(new Date(call.created_at), 'h:mm a')} • {call.type === 'bill' ? 'Requested Bill' : 'Needs Assistance'}</p>
+                  </div>
+                </div>
+                <button onClick={() => resolveWaiterCall(call.id)} className="bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-sm transition-colors flex items-center">
+                  <CheckCircle2 className="w-5 h-5 mr-2" />
+                  Resolve
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Top Action Bar */}
         <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
           {isWaiterAllocated && (

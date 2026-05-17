@@ -29,6 +29,7 @@ export default function App() {
           <Route path="verify-email" element={<VerifyEmail />} />
           <Route path="order" element={<CustomerMenu />} />
           <Route path="orders" element={<CustomerOrders />} />
+          <Route path="profile" element={<CustomerOrders />} />
           <Route path="track/:orderId" element={<OrderTracking />} />
           <Route path="directory" element={<RestaurantDirectory />} />
           

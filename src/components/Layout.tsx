@@ -60,6 +60,9 @@ export default function Layout() {
               {publicSettings?.simulate_order_enabled === 1 && (
                 <Link to="/directory" className={`px-3 py-2 text-sm font-medium transition-colors border-b-2 ${isCurrentPath('/directory') ? 'text-white border-brand-500' : 'text-ink-300 border-transparent hover:text-white hover:border-ink-600'}`}>Simulate Order</Link>
               )}
+              {!user && (
+                <Link to="/profile" className={`px-3 py-2 text-sm font-medium transition-colors border-b-2 ${isCurrentPath('/profile') || isCurrentPath('/orders') ? 'text-white border-brand-500' : 'text-ink-300 border-transparent hover:text-white hover:border-ink-600'}`}>My Profile</Link>
+              )}
               {!user ? (
                 <>
                   <Link to="/login" className={`px-3 py-2 text-sm font-medium transition-colors border-b-2 ${isCurrentPath('/login') ? 'text-white border-brand-500' : 'text-ink-300 border-transparent hover:text-white hover:border-ink-600'}`}>Login</Link>
@@ -105,6 +108,9 @@ export default function Layout() {
             <div className="pt-2 pb-3 space-y-1">
               {publicSettings?.simulate_order_enabled === 1 && (
                 <Link to="/directory" onClick={() => setIsMenuOpen(false)} className={`block px-4 py-3 text-base font-medium border-l-4 ${isCurrentPath('/directory') ? 'text-white bg-ink-800 border-brand-500' : 'text-ink-300 border-transparent hover:text-white hover:bg-ink-800 hover:border-ink-600'}`}>Simulate Order</Link>
+              )}
+              {!user && (
+                <Link to="/profile" onClick={() => setIsMenuOpen(false)} className={`block px-4 py-3 text-base font-medium border-l-4 ${isCurrentPath('/profile') || isCurrentPath('/orders') ? 'text-white bg-ink-800 border-brand-500' : 'text-ink-300 border-transparent hover:text-white hover:bg-ink-800 hover:border-ink-600'}`}>My Profile</Link>
               )}
               {!user ? (
                 <>
