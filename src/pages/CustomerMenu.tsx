@@ -386,10 +386,10 @@ export default function CustomerMenu() {
       }
     };
 
-    if (!viaWhatsApp && paymentMethod === 'Paystack' && restaurant?.paystack_public_key) {
+    if (!viaWhatsApp && paymentMethod === 'Paystack' && (restaurant?.paystack_public_key || restaurant?.platform_paystack_public_key)) {
       const paystack = new PaystackPop();
       paystack.newTransaction({
-        key: restaurant.paystack_public_key,
+        key: restaurant.paystack_public_key || restaurant.platform_paystack_public_key,
         email: customerEmail,
         amount: Math.round((cartTotal() + tipAmount) * 100), // Paystack expects amount in kobo/cents
         currency: restaurant.currency || 'USD',
@@ -400,7 +400,7 @@ export default function CustomerMenu() {
           showToast('Payment cancelled');
         }
       });
-    } else if (!viaWhatsApp && paymentMethod === 'Monnify' && restaurant?.monnify_api_key && restaurant?.monnify_contract_code) {
+    } else if (!viaWhatsApp && paymentMethod === 'Monnify' && ((restaurant?.monnify_api_key && restaurant?.monnify_contract_code) || (restaurant?.platform_monnify_api_key && restaurant?.platform_monnify_contract_code))) {
       // @ts-ignore
       if (window.MonnifySDK) {
         // @ts-ignore
@@ -410,8 +410,8 @@ export default function CustomerMenu() {
           reference: new String((new Date()).getTime()),
           customerFullName: customerName || customerEmail.split('@')[0] || 'Customer',
           customerEmail: customerEmail,
-          apiKey: restaurant.monnify_api_key,
-          contractCode: restaurant.monnify_contract_code,
+          apiKey: restaurant.monnify_api_key || restaurant.platform_monnify_api_key,
+          contractCode: restaurant.monnify_contract_code || restaurant.platform_monnify_contract_code,
           paymentDescription: "Order Payment",
           onComplete: function(response: any) {
             if (response.status === 'SUCCESS') {
@@ -427,12 +427,12 @@ export default function CustomerMenu() {
       } else {
         showToast('Payment gateway not ready. Please try again.');
       }
-    } else if (!viaWhatsApp && paymentMethod === 'Flutterwave' && restaurant?.flutterwave_public_key) {
+    } else if (!viaWhatsApp && paymentMethod === 'Flutterwave' && (restaurant?.flutterwave_public_key || restaurant?.platform_flutterwave_public_key)) {
       // @ts-ignore
       if (window.FlutterwaveCheckout) {
         // @ts-ignore
         window.FlutterwaveCheckout({
-          public_key: restaurant.flutterwave_public_key,
+          public_key: restaurant.flutterwave_public_key || restaurant.platform_flutterwave_public_key,
           tx_ref: `tx-${Date.now()}`,
           amount: cartTotal() + tipAmount,
           currency: restaurant.currency || 'NGN',
@@ -940,7 +940,7 @@ export default function CustomerMenu() {
                           <Banknote className="w-5 h-5" />
                           <span className="font-medium">POS / Transfer</span>
                         </button>
-                        {restaurant?.payment_paystack_enabled === 1 && restaurant?.paystack_public_key && (
+                        {restaurant?.payment_paystack_enabled === 1 && (restaurant?.paystack_public_key || restaurant?.platform_paystack_public_key) && (
                           <button
                             onClick={() => setPaymentMethod('Paystack')}
                             className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 transition-colors ${
@@ -953,7 +953,7 @@ export default function CustomerMenu() {
                             <span className="font-medium">Paystack</span>
                           </button>
                         )}
-                        {restaurant?.payment_monnify_enabled === 1 && restaurant?.monnify_api_key && restaurant?.monnify_contract_code && (
+                        {restaurant?.payment_monnify_enabled === 1 && ((restaurant?.monnify_api_key && restaurant?.monnify_contract_code) || (restaurant?.platform_monnify_api_key && restaurant?.platform_monnify_contract_code)) && (
                           <button
                             onClick={() => setPaymentMethod('Monnify')}
                             className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 transition-colors ${
@@ -966,7 +966,7 @@ export default function CustomerMenu() {
                             <span className="font-medium">Monnify</span>
                           </button>
                         )}
-                        {restaurant?.payment_flutterwave_enabled === 1 && restaurant?.flutterwave_public_key && (
+                        {restaurant?.payment_flutterwave_enabled === 1 && (restaurant?.flutterwave_public_key || restaurant?.platform_flutterwave_public_key) && (
                           <button
                             onClick={() => setPaymentMethod('Flutterwave')}
                             className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 transition-colors ${

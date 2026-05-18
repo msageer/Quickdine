@@ -2964,12 +2964,12 @@ export default function RestaurantDashboard() {
                           }
 
                           // If platform has flutterwave, use it for subscription payment
-                          if (restaurant?.platform_flutterwave_enabled && restaurant?.flutterwave_public_key) {
+                          if (restaurant?.platform_flutterwave_enabled && restaurant?.platform_flutterwave_public_key) {
                             // @ts-ignore
                             if (window.FlutterwaveCheckout) {
                               // @ts-ignore
                               window.FlutterwaveCheckout({
-                                public_key: restaurant.flutterwave_public_key,
+                                public_key: restaurant.platform_flutterwave_public_key,
                                 tx_ref: `sub-${plan.id}-${Date.now()}`,
                                 amount: amount,
                                 currency: restaurant.currency || 'USD',

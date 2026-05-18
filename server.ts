@@ -631,8 +631,8 @@ app.post('/api/auth/signup', async (req, res) => {
     const settings = await db.get('SELECT default_currency FROM platform_settings LIMIT 1') as any;
     const defaultCurrency = settings ? settings.default_currency : 'USD';
 
-    // Get the Professional plan ID for testing
-    const proPlan = await db.get("SELECT id FROM subscription_plans WHERE plan_name = 'Professional' LIMIT 1") as any;
+    // Get the Business Plus plan ID
+    const proPlan = await db.get("SELECT id FROM subscription_plans WHERE plan_name = 'Business Plus' LIMIT 1") as any;
     const planId = proPlan ? proPlan.id : 2;
     
     // Calculate expiry date (1 month from now)
@@ -1102,12 +1102,12 @@ app.get('/api/restaurants', async (req, res) => {
         r.platform_monnify_enabled = platformSettings.payment_monnify_enabled;
         r.platform_flutterwave_enabled = platformSettings.payment_flutterwave_enabled;
         r.payment_paystack_enabled = platformSettings.payment_paystack_enabled === 1 ? r.payment_paystack_enabled : 0;
-        r.paystack_public_key = platformSettings.paystack_public_key;
+        r.platform_paystack_public_key = platformSettings.paystack_public_key;
         r.payment_monnify_enabled = platformSettings.payment_monnify_enabled === 1 ? r.payment_monnify_enabled : 0;
-        r.monnify_api_key = platformSettings.monnify_api_key;
-        r.monnify_contract_code = platformSettings.monnify_contract_code;
+        r.platform_monnify_api_key = platformSettings.monnify_api_key;
+        r.platform_monnify_contract_code = platformSettings.monnify_contract_code;
         r.payment_flutterwave_enabled = platformSettings.payment_flutterwave_enabled === 1 ? r.payment_flutterwave_enabled : 0;
-        r.flutterwave_public_key = platformSettings.flutterwave_public_key;
+        r.platform_flutterwave_public_key = platformSettings.flutterwave_public_key;
       });
     }
     
@@ -1144,12 +1144,12 @@ app.get('/api/restaurants/:id', async (req, res) => {
       restaurant.platform_monnify_enabled = platformSettings.payment_monnify_enabled;
       restaurant.platform_flutterwave_enabled = platformSettings.payment_flutterwave_enabled;
       restaurant.payment_paystack_enabled = platformSettings.payment_paystack_enabled === 1 ? restaurant.payment_paystack_enabled : 0;
-      restaurant.paystack_public_key = platformSettings.paystack_public_key;
+      restaurant.platform_paystack_public_key = platformSettings.paystack_public_key;
       restaurant.payment_monnify_enabled = platformSettings.payment_monnify_enabled === 1 ? restaurant.payment_monnify_enabled : 0;
-      restaurant.monnify_api_key = platformSettings.monnify_api_key;
-      restaurant.monnify_contract_code = platformSettings.monnify_contract_code;
+      restaurant.platform_monnify_api_key = platformSettings.monnify_api_key;
+      restaurant.platform_monnify_contract_code = platformSettings.monnify_contract_code;
       restaurant.payment_flutterwave_enabled = platformSettings.payment_flutterwave_enabled === 1 ? restaurant.payment_flutterwave_enabled : 0;
-      restaurant.flutterwave_public_key = platformSettings.flutterwave_public_key;
+      restaurant.platform_flutterwave_public_key = platformSettings.flutterwave_public_key;
     }
     
     res.json(restaurant);
@@ -1600,14 +1600,19 @@ app.post('/api/admin/restaurants', authenticateToken, authorizeRole(['admin']), 
 
   try {
     const defaultCurrency = await db.get('SELECT default_currency FROM platform_settings LIMIT 1') as any;
-    const plan = await db.get("SELECT id FROM subscription_plans WHERE plan_name = 'Starter' LIMIT 1") as any;
+    const plan = await db.get("SELECT id FROM subscription_plans WHERE plan_name = 'Business Plus' LIMIT 1") as any;
     
+    // Calculate expiry date (1 month from now)
+    const expiryDate = new Date();
+    expiryDate.setMonth(expiryDate.getMonth() + 1);
+    const expiryDateStr = expiryDate.toISOString();
+
     const transaction = db.transaction(async () => {
       const existingUser = await db.get('SELECT id FROM users WHERE email = ?', [owner_email]);
       if (existingUser) throw new Error('Email already in use');
 
-      const resId = (await db.run('INSERT INTO restaurants (name, status, currency, subscription_plan_id, subscription_status, business_type) VALUES (?, ?, ?, ?, ?, ?)', [
-        name, 'Active', defaultCurrency ? defaultCurrency.default_currency : 'USD', plan ? plan.id : 1, 'Active', business_type || 'restaurant'
+      const resId = (await db.run('INSERT INTO restaurants (name, status, currency, subscription_plan_id, subscription_status, subscription_expiry_date, business_type) VALUES (?, ?, ?, ?, ?, ?, ?)', [
+        name, 'Active', defaultCurrency ? defaultCurrency.default_currency : 'USD', plan ? plan.id : 2, 'Active', expiryDateStr, business_type || 'restaurant'
       ])).lastInsertRowid;
       
       await db.run('INSERT INTO users (email, password, role, restaurant_id, email_verified) VALUES (?, ?, ?, ?, 1)', [owner_email, owner_password, 'restaurant', resId]);
