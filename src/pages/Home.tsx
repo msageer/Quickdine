@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { QrCode, Smartphone, Zap, ArrowRight, Store, Utensils, Info, CheckCircle2, AlertCircle } from 'lucide-react';
+import { QrCode, Smartphone, Zap, ArrowRight, Store, Utensils, Info, CheckCircle2, AlertCircle, Star } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useState, useEffect } from 'react';
 import { fetchWithRetry } from '../lib/utils';
@@ -99,6 +99,16 @@ export default function Home() {
             Restaurant Login
           </Link>
         </motion.div>
+        
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+          className="mt-14 max-w-5xl mx-auto rounded-3xl overflow-hidden shadow-2xl relative border-4 border-white"
+        >
+          <img src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1200&q=80" alt="Restaurant interior" className="w-full h-[300px] sm:h-[400px] lg:h-[500px] object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-ink-900/20 to-transparent pointer-events-none"></div>
+        </motion.div>
       </div>
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
@@ -146,10 +156,48 @@ export default function Home() {
           </div>
         </div>
 
+        <div className="mb-16">
+          <h2 className="text-3xl font-bold text-ink-900 mb-8 font-serif flex items-center">
+            <Star className="mr-3 text-brand-500" />
+            Featured Restaurants
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {restaurants.filter(r => r.is_featured === 1 || r.is_vip_featured === 1).map((restaurant) => (
+              <motion.div
+                key={restaurant.id}
+                whileHover={{ y: -4 }}
+                onClick={() => setSelectedItem({ type: 'restaurant', data: restaurant })}
+                className="bg-white rounded-2xl p-6 shadow-sm border border-brand-200 cursor-pointer hover:shadow-md transition-all flex items-center relative overflow-hidden"
+              >
+                <div className="absolute top-0 right-0 bg-brand-500 text-white text-[10px] font-bold px-2 py-1 rounded-bl-lg uppercase tracking-wider">Featured</div>
+                <div className="h-16 w-16 bg-brand-100 rounded-full flex items-center justify-center mr-4 flex-shrink-0 overflow-hidden">
+                  {restaurant.logo_url ? (
+                    <img src={restaurant.logo_url} alt={restaurant.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  ) : (
+                    <Store className="h-8 w-8 text-brand-600" />
+                  )}
+                </div>
+                <div>
+                  <h3 className="font-bold text-xl text-ink-900">{restaurant.name}</h3>
+                  <p className="text-sm text-ink-500 mt-1 flex items-center">
+                    <CheckCircle2 className="w-4 h-4 mr-1 text-brand-500" />
+                    Accepting Dine-in Orders
+                  </p>
+                </div>
+              </motion.div>
+            ))}
+            {restaurants.filter(r => r.is_featured === 1 || r.is_vip_featured === 1).length === 0 && (
+              <div className="col-span-full py-6 text-ink-500 text-sm">
+                No featured restaurants available right now.
+              </div>
+            )}
+          </div>
+        </div>
+
         <div>
           <h2 className="text-3xl font-bold text-ink-900 mb-8 font-serif flex items-center">
             <Store className="mr-3 text-brand-500" />
-            Featured Restaurants
+            All Restaurants
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {restaurants.map((restaurant) => (
@@ -178,7 +226,7 @@ export default function Home() {
             {restaurants.length === 0 && (
               <div className="col-span-full text-center py-12 text-ink-500 bg-white rounded-2xl border border-ink-100 border-dashed">
                 <Store className="mx-auto h-8 w-8 text-ink-300 mb-2" />
-                <p>No featured restaurants available right now.</p>
+                <p>No restaurants available right now.</p>
               </div>
             )}
           </div>

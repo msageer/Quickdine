@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Users, Store, Activity, Settings, PlusCircle, CheckCircle, XCircle, Info, Mail, Calendar, X, ClipboardList, User, TrendingUp, DollarSign, ShoppingBag, CheckCircle2, AlertCircle, CreditCard, LogIn, BellRing, UserPlus, Download, Plus, Receipt, BarChart3, LogOut, Key } from 'lucide-react';
+import { Users, Store, Activity, Settings, PlusCircle, CheckCircle, XCircle, Info, Mail, Calendar, X, ClipboardList, User, TrendingUp, DollarSign, ShoppingBag, CheckCircle2, AlertCircle, CreditCard, LogIn, BellRing, UserPlus, Download, Plus, Receipt, BarChart3, LogOut, Key, Star } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, Legend } from 'recharts';
 import { fetchWithRetry, apiFetch } from '../lib/utils';
 
@@ -1869,11 +1869,15 @@ export default function AdminDashboard() {
                       <textarea value={editRestaurantData.receipt_footer || ''} onChange={e => setEditRestaurantData({...editRestaurantData, receipt_footer: e.target.value})} className="w-full border border-ink-200 rounded-lg px-3 py-2" rows={3} placeholder="Thank you for dining with us!" />
                     </div>
                     <div className="pt-4 border-t border-ink-100">
-                      <h4 className="text-sm font-bold text-ink-900 mb-2">Order Options</h4>
+                      <h4 className="text-sm font-bold text-ink-900 mb-2">Options</h4>
                       <div className="space-y-2">
                         <label className="flex items-center">
                           <input type="checkbox" checked={editRestaurantData.waiter_allocation_enabled === 1} onChange={e => setEditRestaurantData({...editRestaurantData, waiter_allocation_enabled: e.target.checked ? 1 : 0})} className="mr-2 rounded border-ink-300 text-brand-600 focus:ring-brand-500" />
                           <span className="text-sm text-ink-700">Enable Waiter Allocation</span>
+                        </label>
+                        <label className="flex items-center">
+                          <input type="checkbox" checked={editRestaurantData.is_featured === 1} onChange={e => setEditRestaurantData({...editRestaurantData, is_featured: e.target.checked ? 1 : 0})} className="mr-2 rounded border-ink-300 text-brand-600 focus:ring-brand-500" />
+                          <span className="text-sm text-ink-700">Mark as Featured</span>
                         </label>
                       </div>
                     </div>
@@ -1960,6 +1964,15 @@ export default function AdminDashboard() {
                             <p className="text-xs text-ink-500 font-medium mb-0.5">Waiter Allocation</p>
                             <p className="text-sm font-bold text-ink-900">
                               {selectedRestaurant.waiter_allocation_enabled === 1 ? 'Enabled' : 'Disabled'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-start">
+                          <Star className="w-5 h-5 text-ink-400 mr-3 mt-0.5" />
+                          <div>
+                            <p className="text-xs text-ink-500 font-medium mb-0.5">Featured Status</p>
+                            <p className="text-sm font-bold text-ink-900">
+                              {selectedRestaurant.is_featured === 1 ? 'Featured' : 'Standard'}
                             </p>
                           </div>
                         </div>

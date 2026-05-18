@@ -347,7 +347,8 @@ const alterQueries = [
   "ALTER TABLE users ADD COLUMN verification_token TEXT",
   "ALTER TABLE users ADD COLUMN verification_expires DATETIME",
   "ALTER TABLE platform_settings ADD COLUMN global_copyright_footer TEXT DEFAULT 'Powered by QuickDine'",
-  "ALTER TABLE platform_settings ADD COLUMN simulate_order_enabled INTEGER DEFAULT 0"
+  "ALTER TABLE platform_settings ADD COLUMN simulate_order_enabled INTEGER DEFAULT 0",
+  "ALTER TABLE restaurants ADD COLUMN is_featured INTEGER DEFAULT 0"
 ];
 
 const alterPromises = alterQueries.map(q => db.exec(q).catch(() => {}));
@@ -727,7 +728,7 @@ app.patch('/api/admin/restaurants/:id', authenticateToken, authorizeRole(['admin
     'payment_monnify_enabled', 'monnify_api_key', 'monnify_secret_key', 'monnify_contract_code',
     'payment_flutterwave_enabled', 'flutterwave_public_key', 'flutterwave_secret_key',
     'operating_hours', 'account_number', 'bank_name', 'account_name', 'receipt_footer',
-    'subscription_plan_id', 'waiter_allocation_enabled'
+    'subscription_plan_id', 'waiter_allocation_enabled', 'is_featured'
   ];
 
   const setClauses: string[] = [];
@@ -1092,9 +1093,10 @@ app.get('/api/public/settings', async (req, res) => {
 app.get('/api/restaurants', async (req, res) => {
   try {
     const restaurants = await db.all(`
-      SELECT r.*, u.email as owner_email
+      SELECT r.*, u.email as owner_email, s.is_vip_featured
       FROM restaurants r
       LEFT JOIN users u ON r.id = u.restaurant_id AND u.role = 'restaurant'
+      LEFT JOIN subscription_plans s ON r.subscription_plan_id = s.id
     `) as any[];
     
     const platformSettings = await db.get('SELECT payment_paystack_enabled, paystack_public_key, payment_monnify_enabled, monnify_api_key, monnify_contract_code, payment_flutterwave_enabled, flutterwave_public_key FROM platform_settings LIMIT 1') as any;
@@ -1403,8 +1405,12 @@ app.patch('/api/restaurants/:id/settings', authenticateToken, requireRestaurantA
   }
   
   try {
+    const isPaystackEnabled = payment_paystack_enabled === '1' || payment_paystack_enabled === 1 || payment_paystack_enabled === true;
+    const isMonnifyEnabled = payment_monnify_enabled === '1' || payment_monnify_enabled === 1 || payment_monnify_enabled === true;
+    const isFlutterwaveEnabled = payment_flutterwave_enabled === '1' || payment_flutterwave_enabled === 1 || payment_flutterwave_enabled === true;
+
     // Check payment gateway lock
-    if (payment_paystack_enabled || payment_monnify_enabled || payment_flutterwave_enabled) {
+    if (isPaystackEnabled || isMonnifyEnabled || isFlutterwaveEnabled) {
       const restaurant = await db.get(`
         SELECT s.can_use_online_payments 
         FROM restaurants r 
@@ -1422,12 +1428,12 @@ app.patch('/api/restaurants/:id/settings', authenticateToken, requireRestaurantA
     
     if (waiter_allocation_enabled !== undefined) {
       updates.push("waiter_allocation_enabled = ?");
-      values.push(waiter_allocation_enabled ? 1 : 0);
+      values.push((waiter_allocation_enabled === '1' || waiter_allocation_enabled === 1 || waiter_allocation_enabled === true) ? 1 : 0);
     }
 
     if (is_hotel !== undefined) {
       updates.push("is_hotel = ?");
-      values.push(is_hotel ? 1 : 0);
+      values.push((is_hotel === '1' || is_hotel === 1 || is_hotel === true) ? 1 : 0);
     }
     
     if (business_type !== undefined) {
@@ -1499,7 +1505,7 @@ app.patch('/api/restaurants/:id/settings', authenticateToken, requireRestaurantA
 
     if (payment_paystack_enabled !== undefined) {
       updates.push("payment_paystack_enabled = ?");
-      values.push(payment_paystack_enabled ? 1 : 0);
+      values.push(isPaystackEnabled ? 1 : 0);
     }
     if (paystack_public_key !== undefined) {
       updates.push("paystack_public_key = ?");
@@ -1512,7 +1518,7 @@ app.patch('/api/restaurants/:id/settings', authenticateToken, requireRestaurantA
 
     if (payment_monnify_enabled !== undefined) {
       updates.push("payment_monnify_enabled = ?");
-      values.push(payment_monnify_enabled ? 1 : 0);
+      values.push(isMonnifyEnabled ? 1 : 0);
     }
     if (monnify_api_key !== undefined) {
       updates.push("monnify_api_key = ?");
@@ -1529,7 +1535,7 @@ app.patch('/api/restaurants/:id/settings', authenticateToken, requireRestaurantA
 
     if (payment_flutterwave_enabled !== undefined) {
       updates.push("payment_flutterwave_enabled = ?");
-      values.push(payment_flutterwave_enabled ? 1 : 0);
+      values.push(isFlutterwaveEnabled ? 1 : 0);
     }
     if (flutterwave_public_key !== undefined) {
       updates.push("flutterwave_public_key = ?");
