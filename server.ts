@@ -348,7 +348,8 @@ const alterQueries = [
   "ALTER TABLE users ADD COLUMN verification_expires DATETIME",
   "ALTER TABLE platform_settings ADD COLUMN global_copyright_footer TEXT DEFAULT 'Powered by QuickDine'",
   "ALTER TABLE platform_settings ADD COLUMN simulate_order_enabled INTEGER DEFAULT 0",
-  "ALTER TABLE restaurants ADD COLUMN is_featured INTEGER DEFAULT 0"
+  "ALTER TABLE restaurants ADD COLUMN is_featured INTEGER DEFAULT 0",
+  "ALTER TABLE menu_items ADD COLUMN category_ids TEXT"
 ];
 
 const alterPromises = alterQueries.map(q => db.exec(q).catch(() => {}));
@@ -456,21 +457,16 @@ try {
   const planCount = await db.get("SELECT COUNT(*) as count FROM subscription_plans") as any;
   if (planCount.count === 0) {
     const insertPlan = db.prepare("INSERT INTO subscription_plans (plan_name, price_monthly, price_annual, max_waiters, max_monthly_orders, analytics_retention_days, can_export_tax_reports, is_vip_featured, can_use_online_payments, transaction_fee_percentage, is_pay_as_you_go) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    await insertPlan.run('Starter', 0, 0, 1, 100, 7, 0, 0, 0, 0, 0);
-    await insertPlan.run('Professional', 15000, 150000, 10, 999999, 365, 1, 0, 1, 0, 0);
-    await insertPlan.run('Enterprise', 35000, 350000, 999999, 999999, 365, 1, 1, 1, 0, 0);
-    await insertPlan.run('Pay As You Go', 0, 0, 999999, 999999, 365, 1, 1, 1, 2.5, 1);
+    await insertPlan.run('Starter', 5000, 50000, 2, 3000, 30, 0, 0, 0, 0, 0);
+    await insertPlan.run('Business Plus', 15000, 150000, 999999, 999999, 365, 1, 1, 1, 0, 0);
   } else {
-    // Check if Pay As You Go exists
-    const payAsYouGoExists = await db.get("SELECT id FROM subscription_plans WHERE is_pay_as_you_go = 1");
-    if (!payAsYouGoExists) {
-      const insertPlan = db.prepare("INSERT INTO subscription_plans (plan_name, price_monthly, price_annual, max_waiters, max_monthly_orders, analytics_retention_days, can_export_tax_reports, is_vip_featured, can_use_online_payments, transaction_fee_percentage, is_pay_as_you_go) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-      await insertPlan.run('Pay As You Go', 0, 0, 999999, 999999, 365, 1, 1, 1, 2.5, 1);
-    }
-    // Update existing plans to match new specs if they haven't been updated
-    await db.run("UPDATE subscription_plans SET plan_name = 'Starter', max_waiters = 1, can_use_online_payments = 0 WHERE id = 1");
-    await db.run("UPDATE subscription_plans SET plan_name = 'Professional', max_monthly_orders = 999999, can_use_online_payments = 1 WHERE id = 2");
-    await db.run("UPDATE subscription_plans SET plan_name = 'Enterprise', max_waiters = 999999, can_use_online_payments = 1 WHERE id = 3");
+    // Force update existing plans to match new specs
+    await db.run("UPDATE subscription_plans SET plan_name = 'Starter', price_monthly = 5000, price_annual = 50000, max_waiters = 2, max_monthly_orders = 3000, analytics_retention_days = 30, can_export_tax_reports = 0, is_vip_featured = 0, can_use_online_payments = 0, transaction_fee_percentage = 0, is_pay_as_you_go = 0 WHERE id = 1");
+    await db.run("UPDATE subscription_plans SET plan_name = 'Business Plus', price_monthly = 15000, price_annual = 150000, max_waiters = 999999, max_monthly_orders = 999999, analytics_retention_days = 365, can_export_tax_reports = 1, is_vip_featured = 1, can_use_online_payments = 1, transaction_fee_percentage = 0, is_pay_as_you_go = 0 WHERE id = 2");
+    
+    // Move anyone on other plans to Business Plus (id=2), then delete the other plans
+    await db.run("UPDATE restaurants SET subscription_plan_id = 2 WHERE subscription_plan_id > 2");
+    await db.run("DELETE FROM subscription_plans WHERE id > 2");
   }
 } catch (e) {}
 
@@ -1183,7 +1179,7 @@ app.post('/api/restaurants/:id/menu/bulk', authenticateToken, requireRestaurantA
       const categoriesMap = new Map();
       const catQuery = db.prepare('SELECT id FROM menu_categories WHERE restaurant_id = ? AND name = ?');
       const catInsert = db.prepare('INSERT INTO menu_categories (restaurant_id, name) VALUES (?, ?)');
-      const itemInsert = db.prepare('INSERT INTO menu_items (restaurant_id, category_id, name, description, price, prep_time, status) VALUES (?, ?, ?, ?, ?, ?, ?)');
+      const itemInsert = db.prepare('INSERT INTO menu_items (restaurant_id, category_id, category_ids, name, description, price, prep_time, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
 
       for (const item of items) {
         if (!item.category_name || !item.name || item.price === undefined) continue;
@@ -1199,7 +1195,7 @@ app.post('/api/restaurants/:id/menu/bulk', authenticateToken, requireRestaurantA
           categoriesMap.set(item.category_name, cat_id);
         }
         
-        await itemInsert.run(restaurant_id, cat_id, item.name, item.description || null, item.price, item.prep_time || 15, 'Available');
+        await itemInsert.run(restaurant_id, cat_id, JSON.stringify([cat_id.toString()]), item.name, item.description || null, item.price, item.prep_time || 15, 'Available');
       }
     });
 
@@ -1212,7 +1208,7 @@ app.post('/api/restaurants/:id/menu/bulk', authenticateToken, requireRestaurantA
 });
 
 app.post('/api/restaurants/:id/menu', authenticateToken, requireRestaurantAccess, upload.single('image'), async (req, res) => {
-  const { name, description, price, cogs, category_id, prep_time, dietary_badges, modifiers } = req.body;
+  const { name, description, price, cogs, category_id, category_ids, prep_time, dietary_badges, modifiers } = req.body;
   const restaurant_id = req.params.id;
   
   let image_url = req.body.image_url;
@@ -1222,13 +1218,14 @@ app.post('/api/restaurants/:id/menu', authenticateToken, requireRestaurantAccess
   
   try {
     const insertItem = db.prepare(`
-      INSERT INTO menu_items (restaurant_id, category_id, name, description, price, cogs, image_url, prep_time, status, dietary_badges, modifiers) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Available', ?, ?)
+      INSERT INTO menu_items (restaurant_id, category_id, category_ids, name, description, price, cogs, image_url, prep_time, status, dietary_badges, modifiers) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Available', ?, ?)
     `);
     
     const result = await insertItem.run(
       restaurant_id, 
-      category_id, 
+      category_id || 1, 
+      category_ids || JSON.stringify([category_id]),
       name, 
       description || null, 
       parseFloat(price), 
@@ -1247,7 +1244,7 @@ app.post('/api/restaurants/:id/menu', authenticateToken, requireRestaurantAccess
 });
 
 app.put('/api/restaurants/:id/menu/:itemId', authenticateToken, requireRestaurantAccess, upload.single('image'), async (req, res) => {
-  const { name, description, price, cogs, category_id, prep_time, status, dietary_badges, modifiers } = req.body;
+  const { name, description, price, cogs, category_id, category_ids, prep_time, status, dietary_badges, modifiers } = req.body;
   const { itemId } = req.params;
   
   let image_url = req.body.image_url;
@@ -1258,14 +1255,15 @@ app.put('/api/restaurants/:id/menu/:itemId', authenticateToken, requireRestauran
   try {
     await db.run(`
       UPDATE menu_items 
-      SET name = ?, description = ?, price = ?, cogs = ?, category_id = ?, image_url = ?, prep_time = ?, status = ?, dietary_badges = ?, modifiers = ?
+      SET name = ?, description = ?, price = ?, cogs = ?, category_id = ?, category_ids = ?, image_url = ?, prep_time = ?, status = ?, dietary_badges = ?, modifiers = ?
       WHERE id = ?
     `, [
       name, 
       description || null, 
       parseFloat(price), 
       cogs ? parseFloat(cogs) : 0,
-      category_id,
+      category_id || 1,
+      category_ids || JSON.stringify([category_id]),
       image_url || null, 
       prep_time ? parseInt(prep_time) : null,
       status || 'Available',

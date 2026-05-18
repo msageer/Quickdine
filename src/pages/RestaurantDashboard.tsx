@@ -66,6 +66,7 @@ export default function RestaurantDashboard() {
     price: '',
     cogs: '',
     category_id: '',
+    category_ids: [] as string[],
     image_url: '',
     prep_time: '',
     status: 'Available',
@@ -304,10 +305,12 @@ export default function RestaurantDashboard() {
     try {
       const formData = new FormData();
       Object.keys(newMenuItem).forEach(key => {
-        if (key === 'image_url' && newMenuItem[key] instanceof File) {
-          formData.append('image', newMenuItem[key]);
-        } else if (newMenuItem[key] !== null && newMenuItem[key] !== undefined) {
-          formData.append(key, newMenuItem[key]);
+        if (key === 'image_url' && newMenuItem[key as keyof typeof newMenuItem] instanceof File) {
+          formData.append('image', newMenuItem[key as keyof typeof newMenuItem] as File);
+        } else if (key === 'category_ids') {
+          formData.append('category_ids', JSON.stringify(newMenuItem.category_ids));
+        } else if (newMenuItem[key as keyof typeof newMenuItem] !== null && newMenuItem[key as keyof typeof newMenuItem] !== undefined) {
+          formData.append(key, newMenuItem[key as keyof typeof newMenuItem] as string);
         }
       });
 
@@ -321,7 +324,7 @@ export default function RestaurantDashboard() {
           setMenuItems(prev => prev.map(item => item.id === updatedItem.id ? updatedItem : item));
           setIsAddMenuModalOpen(false);
           setEditingMenuItem(null);
-          setNewMenuItem({ name: '', description: '', price: '', cogs: '', category_id: '', image_url: '', prep_time: '', status: 'Available', dietary_badges: '', modifiers: '' });
+          setNewMenuItem({ name: '', description: '', price: '', cogs: '', category_id: '', category_ids: [], image_url: '', prep_time: '', status: 'Available', dietary_badges: '', modifiers: '' });
           showToast('Menu item updated successfully');
         } else {
           showToast('Failed to update menu item');
@@ -335,7 +338,7 @@ export default function RestaurantDashboard() {
           const addedItem = await res.json();
           setMenuItems(prev => [...prev, addedItem]);
           setIsAddMenuModalOpen(false);
-          setNewMenuItem({ name: '', description: '', price: '', cogs: '', category_id: '', image_url: '', prep_time: '', status: 'Available', dietary_badges: '', modifiers: '' });
+          setNewMenuItem({ name: '', description: '', price: '', cogs: '', category_id: '', category_ids: [], image_url: '', prep_time: '', status: 'Available', dietary_badges: '', modifiers: '' });
           showToast('Menu item added successfully');
         } else {
           showToast('Failed to add menu item');
@@ -389,6 +392,7 @@ export default function RestaurantDashboard() {
       price: item.price ? item.price.toString() : '',
       cogs: item.cogs ? item.cogs.toString() : '',
       category_id: item.category_id ? item.category_id.toString() : (categories.length > 0 ? categories[0].id.toString() : ''),
+      category_ids: item.category_ids ? JSON.parse(item.category_ids) : (item.category_id ? [item.category_id.toString()] : []),
       image_url: item.image_url || '',
       prep_time: item.prep_time ? item.prep_time.toString() : '',
       status: item.status || 'Available',
@@ -400,7 +404,7 @@ export default function RestaurantDashboard() {
 
   const openAddMenuModal = () => {
     setEditingMenuItem(null);
-    setNewMenuItem({ name: '', description: '', price: '', cogs: '', category_id: '', image_url: '', prep_time: '', status: 'Available', dietary_badges: '', modifiers: '' });
+    setNewMenuItem({ name: '', description: '', price: '', cogs: '', category_id: '', category_ids: [], image_url: '', prep_time: '', status: 'Available', dietary_badges: '', modifiers: '' });
     setIsAddMenuModalOpen(true);
   };
 
@@ -2478,6 +2482,17 @@ export default function RestaurantDashboard() {
                     The CSV should contain these columns: <strong>Category, Name, Description, Price, Prep Time</strong>.
                   </p>
                   
+                  <div className="flex justify-start">
+                    <a 
+                      href="data:text/csv;charset=utf-8,Category,Name,Description,Price,Prep Time%0ABurgers,Cheeseburger,Delicious%20beef%20burger,10.99,15" 
+                      download="menu_upload_template.csv"
+                      className="text-brand-600 hover:text-brand-700 text-sm font-medium flex items-center gap-1"
+                    >
+                      <Download className="w-4 h-4" />
+                      Download CSV Template
+                    </a>
+                  </div>
+                  
                   <div className="mt-4 border-2 border-dashed border-ink-200 rounded-xl p-8 flex flex-col justify-center items-center">
                     <Upload className="w-10 h-10 text-ink-300 mb-2" />
                     <label className="bg-brand-500 text-white font-bold py-2 px-6 rounded-xl hover:bg-brand-600 transition-colors cursor-pointer shadow-sm text-sm">
@@ -2571,69 +2586,6 @@ export default function RestaurantDashboard() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-ink-700 mb-1">COGS ({getCurrencySymbol(restaurant?.currency)})</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={newMenuItem.cogs}
-                        onChange={e => setNewMenuItem({...newMenuItem, cogs: e.target.value})}
-                        className="w-full px-4 py-2 border border-ink-200 rounded-xl focus:ring-brand-500 focus:border-brand-500"
-                        placeholder="Cost of Goods Sold"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <div className="flex justify-between items-center mb-1">
-                        <label className="block text-sm font-medium text-ink-700">Category *</label>
-                        <button 
-                          type="button" 
-                          onClick={() => setIsAddCategoryModalOpen(true)}
-                          className="text-xs text-brand-600 hover:text-brand-700 font-medium flex items-center"
-                        >
-                          <Plus className="w-3 h-3 mr-0.5" /> New
-                        </button>
-                      </div>
-                      <select
-                        required
-                        value={newMenuItem.category_id}
-                        onChange={e => setNewMenuItem({...newMenuItem, category_id: e.target.value})}
-                        className="w-full px-4 py-2 border border-ink-200 rounded-xl focus:ring-brand-500 focus:border-brand-500 bg-white"
-                      >
-                        <option value="" disabled>Select category</option>
-                        {categories.map(c => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-ink-700 mb-1">Dietary Badges</label>
-                      <input
-                        type="text"
-                        value={newMenuItem.dietary_badges}
-                        onChange={e => setNewMenuItem({...newMenuItem, dietary_badges: e.target.value})}
-                        className="w-full px-4 py-2 border border-ink-200 rounded-xl focus:ring-brand-500 focus:border-brand-500 text-sm"
-                        placeholder="e.g., Vegan, Gluten-Free (comma separated)"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-ink-700 mb-1">Modifiers (JSON)</label>
-                      <input
-                        type="text"
-                        value={newMenuItem.modifiers}
-                        onChange={e => setNewMenuItem({...newMenuItem, modifiers: e.target.value})}
-                        className="w-full px-4 py-2 border border-ink-200 rounded-xl focus:ring-brand-500 focus:border-brand-500 text-sm font-mono"
-                        placeholder='[{"name":"Size","type":"single","options":[{"name":"Small","price":0}]}]'
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
                       <label className="block text-sm font-medium text-ink-700 mb-1">Prep Time (mins)</label>
                       <input
                         type="number"
@@ -2643,6 +2595,44 @@ export default function RestaurantDashboard() {
                         placeholder="15"
                       />
                     </div>
+                  </div>
+                  
+                  <div className="flex flex-col gap-2">
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="block text-sm font-medium text-ink-700">Categories (Select at least one) *</label>
+                      <button 
+                        type="button" 
+                        onClick={() => setIsAddCategoryModalOpen(true)}
+                        className="text-xs text-brand-600 hover:text-brand-700 font-medium flex items-center"
+                      >
+                        <Plus className="w-3 h-3 mr-0.5" /> New Category
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {categories.map(c => {
+                        const isSelected = newMenuItem.category_ids?.includes(c.id.toString()) || newMenuItem.category_id === c.id.toString();
+                        return (
+                          <label key={c.id} className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors ${isSelected ? 'bg-brand-50 border-brand-500' : 'bg-white border-ink-200 hover:bg-ink-50'}`}>
+                            <input 
+                              type="checkbox" 
+                              checked={isSelected}
+                              onChange={(e) => {
+                                const currentIds = newMenuItem.category_ids || [];
+                                const newIds = e.target.checked 
+                                  ? [...currentIds, c.id.toString()]
+                                  : currentIds.filter(id => id !== c.id.toString());
+                                setNewMenuItem({...newMenuItem, category_ids: newIds, category_id: newIds.length > 0 ? newIds[0] : ''});
+                              }}
+                              className="rounded text-brand-600 focus:ring-brand-500" 
+                            />
+                            <span className="text-sm select-none">{c.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-ink-700 mb-1">Image</label>
                       <input
@@ -2659,19 +2649,18 @@ export default function RestaurantDashboard() {
                         <div className="mt-2 text-sm text-ink-500">Current image: {newMenuItem.image_url.split('/').pop()}</div>
                       )}
                     </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-ink-700 mb-1">Status</label>
-                    <select
-                      value={newMenuItem.status}
-                      onChange={e => setNewMenuItem({...newMenuItem, status: e.target.value})}
-                      className="w-full px-4 py-2 border border-ink-200 rounded-xl focus:ring-brand-500 focus:border-brand-500 bg-white"
-                    >
-                      <option value="Available">Available</option>
-                      <option value="Not Available">Not Available</option>
-                      <option value="Out of Stock">Out of Stock</option>
-                    </select>
+                    <div>
+                      <label className="block text-sm font-medium text-ink-700 mb-1">Status</label>
+                      <select
+                        value={newMenuItem.status}
+                        onChange={e => setNewMenuItem({...newMenuItem, status: e.target.value})}
+                        className="w-full px-4 py-2 border border-ink-200 rounded-xl focus:ring-brand-500 focus:border-brand-500 bg-white"
+                      >
+                        <option value="Available">Available</option>
+                        <option value="Not Available">Not Available</option>
+                        <option value="Out of Stock">Out of Stock</option>
+                      </select>
+                    </div>
                   </div>
 
                   <div className="pt-4 mt-6 border-t border-ink-100 flex justify-end gap-3">

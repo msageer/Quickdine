@@ -708,11 +708,15 @@ export default function CustomerMenu() {
       {/* Menu Categories */}
       <div className="max-w-3xl mx-auto px-4 py-6 pb-32">
         {menu.categories.map(category => {
-          const categoryItems = menu.items.filter(item => 
-            item.category_id === category.id && 
+          const categoryItems = menu.items.filter(item => {
+            let catIds = [item.category_id];
+            if (item.category_ids) {
+              try { catIds = JSON.parse(item.category_ids).map(Number); } catch(e) {}
+            }
+            return catIds.includes(category.id) &&
             (!item.status || item.status === 'Available') &&
-            (item.name.toLowerCase().includes(searchQuery.toLowerCase()) || (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase())))
-          );
+            (item.name.toLowerCase().includes(searchQuery.toLowerCase()) || (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase())));
+          });
           if (categoryItems.length === 0) return null;
           
           return (
