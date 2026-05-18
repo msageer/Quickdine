@@ -2558,7 +2558,7 @@ io.on('connection', (socket) => {
 
 async function startServer() {
   await initializeDatabase();
-  app.use('/uploads', express.static(path.join(rootDir, 'uploads')));
+  app.use('/uploads', express.static(uploadDir));
 
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');

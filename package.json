@@ -5,6 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
+    "test-serve": "node test-upload-serve.cjs",
+    "test-check": "node test-image-exists.cjs",
+    "test-image": "node test-image.cjs",
+    "test-menu": "node test-menu.cjs",
     "start": "node dist/server.cjs",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "preview": "vite preview",
