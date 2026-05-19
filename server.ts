@@ -631,9 +631,9 @@ app.post('/api/auth/signup', async (req, res) => {
     const settings = await db.get('SELECT default_currency FROM platform_settings LIMIT 1') as any;
     const defaultCurrency = settings ? settings.default_currency : 'USD';
 
-    // Get the Business Plus plan ID
-    const proPlan = await db.get("SELECT id FROM subscription_plans WHERE plan_name = 'Business Plus' LIMIT 1") as any;
-    const planId = proPlan ? proPlan.id : 2;
+    // Get the Starter plan ID
+    const proPlan = await db.get("SELECT id FROM subscription_plans WHERE plan_name = 'Starter' LIMIT 1") as any;
+    const planId = proPlan ? proPlan.id : 1;
     
     // Calculate expiry date (1 month from now)
     const expiryDate = new Date();
@@ -1600,7 +1600,7 @@ app.post('/api/admin/restaurants', authenticateToken, authorizeRole(['admin']), 
 
   try {
     const defaultCurrency = await db.get('SELECT default_currency FROM platform_settings LIMIT 1') as any;
-    const plan = await db.get("SELECT id FROM subscription_plans WHERE plan_name = 'Business Plus' LIMIT 1") as any;
+    const plan = await db.get("SELECT id FROM subscription_plans WHERE plan_name = 'Starter' LIMIT 1") as any;
     
     // Calculate expiry date (1 month from now)
     const expiryDate = new Date();
@@ -1612,7 +1612,7 @@ app.post('/api/admin/restaurants', authenticateToken, authorizeRole(['admin']), 
       if (existingUser) throw new Error('Email already in use');
 
       const resId = (await db.run('INSERT INTO restaurants (name, status, currency, subscription_plan_id, subscription_status, subscription_expiry_date, business_type) VALUES (?, ?, ?, ?, ?, ?, ?)', [
-        name, 'Active', defaultCurrency ? defaultCurrency.default_currency : 'USD', plan ? plan.id : 2, 'Active', expiryDateStr, business_type || 'restaurant'
+        name, 'Active', defaultCurrency ? defaultCurrency.default_currency : 'USD', plan ? plan.id : 1, 'Active', expiryDateStr, business_type || 'restaurant'
       ])).lastInsertRowid;
       
       await db.run('INSERT INTO users (email, password, role, restaurant_id, email_verified) VALUES (?, ?, ?, ?, 1)', [owner_email, owner_password, 'restaurant', resId]);
@@ -2089,7 +2089,8 @@ app.post('/api/orders', async (req, res) => {
         <p style="font-size: 14px; color: #999; margin-top: 20px;">We will notify you when your order status updates.</p>
       </div>
       `;
-      sendPlatformEmail(newOrder.customer_email, `Order Confirmation: #${newOrder.order_number}`, emailHtml);
+      // Send async without awaiting to prevent slow order loading
+      sendPlatformEmail(newOrder.customer_email, `Order Confirmation: #${newOrder.order_number}`, emailHtml).catch(console.error);
     }
     
     res.json({ success: true, orderId, orderNumber: order_number });

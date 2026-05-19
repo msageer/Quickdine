@@ -3008,7 +3008,7 @@ export default function RestaurantDashboard() {
                       >
                         {restaurant?.subscription_plan_id === plan.id && restaurant?.subscription_billing_cycle === paywallBillingCycle
                           ? 'Current Plan'
-                          : 'Upgrade Now'}
+                          : (subscriptionPlans.find(p => p.id === restaurant?.subscription_plan_id)?.price_monthly || 0) > plan.price_monthly ? 'Downgrade Now' : 'Upgrade Now'}
                       </button>
                     </div>
                   ))}
@@ -3380,48 +3380,55 @@ function OrderCard({ order, items, onUpdateStatus, onAssignWaiter, onUpdatePayme
           </div>
         )}
 
-        <div className="flex justify-between items-center mt-2 pt-3 border-t border-ink-100" onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center gap-3">
-            <span className="text-lg font-bold text-ink-900">{getCurrencySymbol(restaurant?.currency)}{order.total_amount.toFixed(2)}</span>
+        <div className="flex justify-between items-center mt-2 pt-3 border-t border-ink-100 flex-wrap gap-3" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-3 w-full sm:w-auto overflow-x-auto pb-1">
+            <span className="text-xl font-black text-ink-900 shrink-0">{getCurrencySymbol(restaurant?.currency)}{order.total_amount.toFixed(2)}</span>
             <button
               onClick={handlePrintReceipt}
-              className="p-1.5 text-ink-500 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold text-ink-700 bg-ink-100 hover:bg-ink-200 rounded-lg transition-colors shrink-0"
               title="Print Receipt"
             >
               <Printer className="w-4 h-4" />
+              Print
             </button>
             {onApplyDiscount && (
               <button
                 onClick={(e) => { e.stopPropagation(); setShowDiscountModal(true); }}
-                className="p-1.5 text-ink-500 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold text-ink-700 bg-ink-100 hover:bg-ink-200 rounded-lg transition-colors shrink-0"
                 title="Apply Discount"
               >
                 <Percent className="w-4 h-4" />
+                Discount
               </button>
             )}
           </div>
           
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 justify-end">
             {order.status === 'Pending' && (
               <button 
                 onClick={() => onUpdateStatus(order.id, 'Accepted')}
-                className="bg-brand-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-brand-600 transition-colors"
+                className="bg-brand-500 text-white text-sm font-bold px-4 py-2 rounded-xl hover:bg-brand-600 transition-colors shadow-sm shadow-brand-500/20 w-full sm:w-auto text-center"
               >
-                Accept
+                Accept Order
               </button>
             )}
             {order.status === 'Accepted' && (
               <button 
-                onClick={() => onUpdateStatus(order.id, 'Preparing')}
-                className="bg-blue-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-blue-600 transition-colors"
+                onClick={() => {
+                  if (order.payment_status !== 'Paid' && onUpdatePaymentStatus) {
+                    onUpdatePaymentStatus(order.id, 'Paid');
+                  }
+                  onUpdateStatus(order.id, 'Preparing');
+                }}
+                className="bg-blue-500 text-white text-sm font-bold px-4 py-2 rounded-xl hover:bg-blue-600 transition-colors shadow-sm shadow-blue-500/20 w-full sm:w-auto text-center"
               >
-                Start Prep
+                {order.payment_status !== 'Paid' ? 'Mark Paid & Start Prep' : 'Start Prep'}
               </button>
             )}
             {order.status === 'Preparing' && (
               <button 
                 onClick={() => onUpdateStatus(order.id, 'Ready')}
-                className="bg-amber-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-amber-600 transition-colors"
+                className="bg-amber-500 text-white text-sm font-bold px-4 py-2 rounded-xl hover:bg-amber-600 transition-colors shadow-sm shadow-amber-500/20 w-full sm:w-auto text-center"
               >
                 Mark Ready
               </button>
@@ -3429,12 +3436,12 @@ function OrderCard({ order, items, onUpdateStatus, onAssignWaiter, onUpdatePayme
             {order.status === 'Ready' && (
               <button 
                 onClick={() => onUpdateStatus(order.id, 'Delivered')}
-                className="bg-brand-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-brand-600 transition-colors"
+                className="bg-green-500 text-white text-sm font-bold px-4 py-2 rounded-xl hover:bg-green-600 transition-colors shadow-sm shadow-green-500/20 w-full sm:w-auto text-center"
               >
                 Deliver
               </button>
             )}
-            {compact && <span className="text-xs font-medium text-brand-600 bg-brand-50 px-2 py-1 rounded-md">{order.status}</span>}
+            {compact && <span className="text-xs font-bold text-brand-600 bg-brand-50 px-3 py-1.5 rounded-lg">{order.status}</span>}
           </div>
         </div>
       </div>
