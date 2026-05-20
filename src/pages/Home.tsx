@@ -7,6 +7,8 @@ import { fetchWithRetry } from '../lib/utils';
 export default function Home() {
   const [meals, setMeals] = useState<any[]>([]);
   const [restaurants, setRestaurants] = useState<any[]>([]);
+  const [slides, setSlides] = useState<any[]>([]);
+  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [selectedItem, setSelectedItem] = useState<any>(null);
 
   const [error, setError] = useState<string | null>(null);
@@ -25,6 +27,17 @@ export default function Home() {
   };
 
   useEffect(() => {
+    const slideInterval = setInterval(() => {
+      setSlides(current => {
+        if (current.length === 0) return current;
+        setCurrentSlideIndex(prev => (prev + 1) % current.length);
+        return current;
+      });
+    }, 5000);
+    return () => clearInterval(slideInterval);
+  }, []);
+
+  useEffect(() => {
     const fetchData = async () => {
       try {
         const results = await Promise.allSettled([
@@ -35,22 +48,27 @@ export default function Home() {
           fetchWithRetry('/api/restaurants').catch(err => {
             console.error('Network error fetching restaurants:', err);
             throw err;
+          }),
+          fetchWithRetry('/api/hero-slides').catch(err => {
+            console.error('Network error fetching slides:', err);
+            return { json: () => [] };
           })
         ]);
         
-        const [mealsRes, restRes] = results;
+        const [mealsRes, restRes, slidesRes] = results;
         
         if (mealsRes.status === 'fulfilled') {
           setMeals(await mealsRes.value.json());
-        } else {
-          console.error('Failed to fetch meals:', mealsRes);
         }
         
         if (restRes.status === 'fulfilled') {
           const allRest = await restRes.value.json();
           setRestaurants(allRest.filter((r: any) => r.status === 'Active'));
-        } else {
-          console.error('Failed to fetch restaurants:', restRes);
+        }
+
+        if (slidesRes.status === 'fulfilled') {
+          const slidesData = await (slidesRes.value as any).json();
+          setSlides(slidesData);
         }
       } catch (err: any) {
         console.error('Failed to fetch data', err);
@@ -104,10 +122,47 @@ export default function Home() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.3 }}
-          className="mt-14 max-w-5xl mx-auto rounded-3xl overflow-hidden shadow-2xl relative border-4 border-white"
+          className="mt-14 max-w-5xl mx-auto rounded-3xl overflow-hidden shadow-xl relative border-4 border-white lg:h-[300px] md:h-[280px] h-[240px]"
         >
-          <img src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1200&q=80" alt="Restaurant interior" className="w-full h-[300px] sm:h-[400px] lg:h-[500px] object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-t from-ink-900/20 to-transparent pointer-events-none"></div>
+          <AnimatePresence mode="wait">
+            {slides.length > 0 ? (
+              <motion.div
+                key={currentSlideIndex}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.5 }}
+                className="absolute inset-0"
+              >
+                <img src={slides[currentSlideIndex].image_url} alt="Slider image" className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-ink-900/60 to-transparent pointer-events-none"></div>
+                {(slides[currentSlideIndex].title || slides[currentSlideIndex].subtitle) && (
+                  <div className="absolute bottom-8 left-8 right-8 text-left">
+                    {slides[currentSlideIndex].title && <h2 className="text-3xl font-bold text-white mb-2">{slides[currentSlideIndex].title}</h2>}
+                    {slides[currentSlideIndex].subtitle && <p className="text-lg text-white/90">{slides[currentSlideIndex].subtitle}</p>}
+                  </div>
+                )}
+              </motion.div>
+            ) : (
+               <div className="absolute inset-0">
+                  <img src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1200&q=80" alt="Restaurant interior" className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-ink-900/40 to-transparent pointer-events-none"></div>
+               </div>
+            )}
+          </AnimatePresence>
+          
+          {slides.length > 1 && (
+            <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2 z-10">
+              {slides.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setCurrentSlideIndex(i)}
+                  className={`w-2.5 h-2.5 rounded-full transition-colors ${i === currentSlideIndex ? 'bg-white' : 'bg-white/50'}`}
+                  aria-label={`Go to slide ${i + 1}`}
+                />
+              ))}
+            </div>
+          )}
         </motion.div>
       </div>
 

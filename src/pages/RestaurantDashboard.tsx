@@ -2931,24 +2931,26 @@ export default function RestaurantDashboard() {
                           const isPayAsYouGo = plan.is_pay_as_you_go === 1;
                           const amount = paywallBillingCycle === 'annual' && !isPayAsYouGo ? plan.price_annual : plan.price_monthly;
                           
-                          const upgradeSubscription = async () => {
+                          const upgradeSubscription = async (status: string = 'Active') => {
                             try {
                               const res = await apiFetch(`/api/restaurants/${id}/settings`, {
                                 method: 'PATCH',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
                                   subscription_plan_id: plan.id,
-                                  subscription_billing_cycle: paywallBillingCycle
+                                  subscription_billing_cycle: paywallBillingCycle,
+                                  subscription_status: status
                                 })
                               });
                               if (res.ok) {
                                 setRestaurant((prev: any) => ({
                                   ...prev,
                                   subscription_plan_id: plan.id,
-                                  subscription_billing_cycle: paywallBillingCycle
+                                  subscription_billing_cycle: paywallBillingCycle,
+                                  subscription_status: status
                                 }));
                                 setPaywallModal(null);
-                                showToast(`Successfully upgraded to ${plan.plan_name} plan!`, 'success');
+                                showToast(status === 'Active' ? `Successfully upgraded to ${plan.plan_name} plan!` : 'Upgrade requested. Pending payment verification.', 'success');
                               } else {
                                 showToast('Failed to upgrade plan');
                               }
@@ -2959,7 +2961,7 @@ export default function RestaurantDashboard() {
                           };
 
                           if (amount === 0 || isPayAsYouGo) {
-                            upgradeSubscription();
+                            upgradeSubscription('Active');
                             return;
                           }
 
@@ -2975,8 +2977,8 @@ export default function RestaurantDashboard() {
                                 currency: restaurant.currency || 'USD',
                                 payment_options: "card, mobilemoneyghana, ussd",
                                 customer: {
-                                  email: user?.email || 'restaurant@example.com',
-                                  name: restaurant.name || 'Restaurant Owner',
+                                  email: restaurant?.email || 'restaurant@example.com',
+                                  name: restaurant?.name || 'Restaurant Owner',
                                 },
                                 customization: {
                                   title: "Subscription Upgrade",
@@ -2985,7 +2987,7 @@ export default function RestaurantDashboard() {
                                 },
                                 callback: function (data: any) {
                                   console.log("Flutterwave payment successful", data);
-                                  upgradeSubscription();
+                                  upgradeSubscription('Active');
                                 },
                                 onClose: function () {
                                   // User closed the widget
@@ -2996,7 +2998,7 @@ export default function RestaurantDashboard() {
                             }
                           } else {
                             // Offline / placeholder logic if flutterwave is not enabled on platform
-                            upgradeSubscription();
+                            upgradeSubscription('Pending Payment');
                           }
                         }}
                         disabled={restaurant?.subscription_plan_id === plan.id && restaurant?.subscription_billing_cycle === paywallBillingCycle}

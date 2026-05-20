@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Users, Store, Activity, Settings, PlusCircle, CheckCircle, XCircle, Info, Mail, Calendar, X, ClipboardList, User, TrendingUp, DollarSign, ShoppingBag, CheckCircle2, AlertCircle, CreditCard, LogIn, BellRing, UserPlus, Download, Plus, Receipt, BarChart3, LogOut, Key, Star } from 'lucide-react';
+import { Users, Store, Activity, Settings, PlusCircle, CheckCircle, XCircle, Info, Mail, Calendar, X, ClipboardList, User, TrendingUp, DollarSign, ShoppingBag, CheckCircle2, AlertCircle, CreditCard, LogIn, BellRing, UserPlus, Download, Plus, Receipt, BarChart3, LogOut, Key, Star, Image, Trash2 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, Legend } from 'recharts';
 import { fetchWithRetry, apiFetch } from '../lib/utils';
 
@@ -11,6 +11,7 @@ export default function AdminDashboard() {
   const [isEditingRestaurant, setIsEditingRestaurant] = useState(false);
   const [editRestaurantData, setEditRestaurantData] = useState<any>(null);
   const [settings, setSettings] = useState<any>({ default_currency: 'USD', notifications_enabled: 1 });
+  const [slides, setSlides] = useState<any[]>([]);
   const [plans, setPlans] = useState<any[]>([]);
   const [profile, setProfile] = useState<any>({ email: '', password: '' });
   const [isAddPlanModalOpen, setIsAddPlanModalOpen] = useState(false);
@@ -40,6 +41,9 @@ export default function AdminDashboard() {
   const [newRestaurant, setNewRestaurant] = useState({ name: '', owner_email: '', owner_password: '', business_type: 'restaurant' });
   const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState(false);
   const [resetPasswordData, setResetPasswordData] = useState({ restaurant_id: '', new_password: '' });
+
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const isSuperAdmin = user.role === 'super_admin';
 
   const handleAddRestaurant = async () => {
     try {
@@ -218,10 +222,14 @@ export default function AdminDashboard() {
           fetchWithRetry('/api/admin/plans').catch(err => {
             console.error('Network error fetching plans:', err);
             throw err;
+          }),
+          fetchWithRetry('/api/hero-slides').catch(err => {
+            console.error('Network error fetching slides:', err);
+            throw err;
           })
         ]);
         
-        const [resRestaurants, resSettings, resPlans] = results;
+        const [resRestaurants, resSettings, resPlans, resSlides] = results;
         
         if (resRestaurants.status === 'fulfilled' && resRestaurants.value.ok) {
           setRestaurants(await resRestaurants.value.json());
@@ -229,8 +237,11 @@ export default function AdminDashboard() {
         if (resSettings.status === 'fulfilled' && resSettings.value.ok) {
           setSettings(await resSettings.value.json());
         }
-        if (resPlans?.status === 'fulfilled' && resPlans.value.ok) {
+        if (resPlans.status === 'fulfilled' && resPlans.value.ok) {
           setPlans(await resPlans.value.json());
+        }
+        if (resSlides.status === 'fulfilled' && resSlides.value.ok) {
+          setSlides(await resSlides.value.json());
         }
 
         await fetchAnalytics();
@@ -456,13 +467,15 @@ export default function AdminDashboard() {
             <Store className={`mr-3 h-5 w-5 ${activeTab === 'restaurants' ? 'text-white' : 'text-ink-500'}`} />
             Restaurants
           </button>
-          <button 
-            onClick={() => setActiveTab('users')}
-            className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${activeTab === 'users' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'hover:bg-ink-800 hover:text-white text-ink-400'}`}
-          >
-            <Users className={`mr-3 h-5 w-5 ${activeTab === 'users' ? 'text-white' : 'text-ink-500'}`} />
-            Users
-          </button>
+          {isSuperAdmin && (
+            <button 
+              onClick={() => setActiveTab('users')}
+              className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${activeTab === 'users' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'hover:bg-ink-800 hover:text-white text-ink-400'}`}
+            >
+              <Users className={`mr-3 h-5 w-5 ${activeTab === 'users' ? 'text-white' : 'text-ink-500'}`} />
+              Users
+            </button>
+          )}
           <button 
             onClick={() => setActiveTab('analytics')}
             className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${activeTab === 'analytics' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'hover:bg-ink-800 hover:text-white text-ink-400'}`}
@@ -470,30 +483,39 @@ export default function AdminDashboard() {
             <Activity className={`mr-3 h-5 w-5 ${activeTab === 'analytics' ? 'text-white' : 'text-ink-500'}`} />
             Analytics
           </button>
-          <div className="pt-4 mt-4 border-t border-ink-800">
-            <p className="px-4 text-xs font-semibold text-ink-500 uppercase tracking-wider mb-2">System</p>
-            <button 
-              onClick={() => setActiveTab('settings')}
-              className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${activeTab === 'settings' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'hover:bg-ink-800 hover:text-white text-ink-400'}`}
-            >
-              <Settings className={`mr-3 h-5 w-5 ${activeTab === 'settings' ? 'text-white' : 'text-ink-500'}`} />
-              Settings
-            </button>
-            <button 
-              onClick={() => setActiveTab('pricing')}
-              className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${activeTab === 'pricing' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'hover:bg-ink-800 hover:text-white text-ink-400'}`}
-            >
-              <CreditCard className={`mr-3 h-5 w-5 ${activeTab === 'pricing' ? 'text-white' : 'text-ink-500'}`} />
-              Pricing Plans
-            </button>
-            <button 
-              onClick={() => setActiveTab('profile')}
-              className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${activeTab === 'profile' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'hover:bg-ink-800 hover:text-white text-ink-400'}`}
-            >
-              <User className={`mr-3 h-5 w-5 ${activeTab === 'profile' ? 'text-white' : 'text-ink-500'}`} />
-              Profile
-            </button>
-          </div>
+          {isSuperAdmin && (
+            <div className="pt-4 mt-4 border-t border-ink-800">
+              <p className="px-4 text-xs font-semibold text-ink-500 uppercase tracking-wider mb-2">System</p>
+              <button 
+                onClick={() => setActiveTab('settings')}
+                className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${activeTab === 'settings' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'hover:bg-ink-800 hover:text-white text-ink-400'}`}
+              >
+                <Settings className={`mr-3 h-5 w-5 ${activeTab === 'settings' ? 'text-white' : 'text-ink-500'}`} />
+                Settings
+              </button>
+              <button 
+                onClick={() => setActiveTab('pricing')}
+                className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${activeTab === 'pricing' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'hover:bg-ink-800 hover:text-white text-ink-400'}`}
+              >
+                <CreditCard className={`mr-3 h-5 w-5 ${activeTab === 'pricing' ? 'text-white' : 'text-ink-500'}`} />
+                Pricing Plans
+              </button>
+              <button 
+                onClick={() => setActiveTab('slides')}
+                className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${activeTab === 'slides' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'hover:bg-ink-800 hover:text-white text-ink-400'}`}
+              >
+                <Image className={`mr-3 h-5 w-5 ${activeTab === 'slides' ? 'text-white' : 'text-ink-500'}`} />
+                Home Slider
+              </button>
+              <button 
+                onClick={() => setActiveTab('profile')}
+                className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${activeTab === 'profile' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'hover:bg-ink-800 hover:text-white text-ink-400'}`}
+              >
+                <User className={`mr-3 h-5 w-5 ${activeTab === 'profile' ? 'text-white' : 'text-ink-500'}`} />
+                Profile
+              </button>
+            </div>
+          )}
         </nav>
         <div className="p-4 border-t border-ink-800">
           <button 
@@ -1455,6 +1477,85 @@ export default function AdminDashboard() {
             </div>
           )}
 
+          {activeTab === 'slides' && (
+            <div className="space-y-8 max-w-5xl mx-auto">
+              <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-ink-100">
+                <div>
+                  <h1 className="text-2xl font-bold text-ink-900 font-serif">Home Slider</h1>
+                  <p className="text-ink-500 text-sm mt-1">Manage the image slider on the homepage.</p>
+                </div>
+              </div>
+              
+              <div className="bg-white rounded-2xl shadow-sm border border-ink-100 p-6">
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  const form = e.target as HTMLFormElement;
+                  const formData = new FormData(form);
+                  try {
+                    const res = await apiFetch('/api/admin/hero-slides', { method: 'POST', body: formData });
+                    if (res.ok) {
+                      showToast('Slide added successfully', 'success');
+                      form.reset();
+                      const getSlides = await fetchWithRetry('/api/hero-slides');
+                      if (getSlides.ok) setSlides(await getSlides.json());
+                    } else showToast('Failed to add slide');
+                  } catch (err) {
+                    showToast('Failed to add slide');
+                  }
+                }} className="space-y-4 mb-8 pb-8 border-b border-ink-100">
+                  <h2 className="text-lg font-bold text-ink-900">Add New Slide</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-ink-700 mb-1">Image (File)</label>
+                      <input type="file" name="image" accept="image/*" className="w-full px-4 py-2 border border-ink-200 rounded-xl focus:ring-brand-500 focus:border-brand-500" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-ink-700 mb-1">...or Image URL</label>
+                      <input type="url" name="image_url" placeholder="https://..." className="w-full px-4 py-2 border border-ink-200 rounded-xl focus:ring-brand-500 focus:border-brand-500" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-ink-700 mb-1">Title</label>
+                      <input type="text" name="title" required className="w-full px-4 py-2 border border-ink-200 rounded-xl focus:ring-brand-500 focus:border-brand-500" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-ink-700 mb-1">Subtitle</label>
+                      <input type="text" name="subtitle" className="w-full px-4 py-2 border border-ink-200 rounded-xl focus:ring-brand-500 focus:border-brand-500" />
+                    </div>
+                  </div>
+                  <button type="submit" className="bg-brand-500 text-white px-6 py-2 rounded-xl font-bold hover:bg-brand-600 transition-colors">Add Slide</button>
+                </form>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {slides.map(slide => (
+                    <div key={slide.id} className="border border-ink-200 rounded-xl overflow-hidden relative group">
+                      <img src={slide.image_url} alt={slide.title} className="w-full h-48 object-cover" />
+                      <div className="p-4 bg-white">
+                        <h3 className="font-bold text-ink-900">{slide.title}</h3>
+                        {slide.subtitle && <p className="text-sm text-ink-500 mt-1">{slide.subtitle}</p>}
+                      </div>
+                      <button 
+                        onClick={async () => {
+                          if (confirm('Delete this slide?')) {
+                            try {
+                              const res = await apiFetch(`/api/admin/hero-slides/${slide.id}`, { method: 'DELETE' });
+                              if (res.ok) {
+                                setSlides(slides.filter(s => s.id !== slide.id));
+                                showToast('Slide deleted', 'success');
+                              }
+                            } catch (e) {}
+                          }
+                        }}
+                        className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-red-600"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'profile' && (
             <div className="space-y-8 max-w-2xl mx-auto">
               <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-ink-100">
@@ -1862,6 +1963,19 @@ export default function AdminDashboard() {
                         {plans.map(plan => (
                           <option key={plan.id} value={plan.id}>{plan.plan_name}</option>
                         ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-ink-700 mb-1">Subscription Status (Activation)</label>
+                      <select 
+                        value={editRestaurantData.subscription_status || 'Active'} 
+                        onChange={e => setEditRestaurantData({...editRestaurantData, subscription_status: e.target.value})} 
+                        className="w-full border border-ink-200 rounded-lg px-3 py-2"
+                      >
+                        <option value="Active">Active</option>
+                        <option value="Pending Payment">Pending Payment</option>
+                        <option value="Expired">Expired</option>
+                        <option value="Cancelled">Cancelled</option>
                       </select>
                     </div>
                     <div>
@@ -2400,13 +2514,15 @@ export default function AdminDashboard() {
           <Store className="h-6 w-6 mb-1" />
           <span className="text-[10px] font-medium">Restaurants</span>
         </button>
-        <button 
-          onClick={() => setActiveTab('plans')}
-          className={`flex flex-col items-center py-3 px-4 ${activeTab === 'plans' ? 'text-brand-600' : 'text-ink-500'}`}
-        >
-          <CreditCard className="h-6 w-6 mb-1" />
-          <span className="text-[10px] font-medium">Plans</span>
-        </button>
+        {isSuperAdmin && (
+          <button 
+            onClick={() => setActiveTab('plans')}
+            className={`flex flex-col items-center py-3 px-4 ${activeTab === 'plans' ? 'text-brand-600' : 'text-ink-500'}`}
+          >
+            <CreditCard className="h-6 w-6 mb-1" />
+            <span className="text-[10px] font-medium">Plans</span>
+          </button>
+        )}
         <button 
           onClick={() => setActiveTab('analytics')}
           className={`flex flex-col items-center py-3 px-4 ${activeTab === 'analytics' ? 'text-brand-600' : 'text-ink-500'}`}

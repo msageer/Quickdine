@@ -41,7 +41,7 @@ export default function App() {
             <Route path="waiter/:id" element={<WaiterDashboard />} />
           </Route>
           
-          <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
+          <Route element={<ProtectedRoute allowedRoles={['admin', 'super_admin']} />}>
             <Route path="admin" element={<AdminDashboard />} />
           </Route>
         </Route>
