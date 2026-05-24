@@ -70,7 +70,7 @@ export default function Layout() {
                 </>
               ) : (
                 <>
-                  {user.role === 'admin' && (
+                  {(user.role === 'admin' || user.role === 'super_admin') && (
                     <Link to="/admin" className={`px-3 py-2 text-sm font-medium transition-colors border-b-2 ${isCurrentPath('/admin') ? 'text-white border-brand-500' : 'text-ink-300 border-transparent hover:text-white hover:border-ink-600'}`}>Admin Dashboard</Link>
                   )}
                   {user.role === 'restaurant' && (
@@ -119,7 +119,7 @@ export default function Layout() {
                 </>
               ) : (
                 <>
-                  {user.role === 'admin' && (
+                  {(user.role === 'admin' || user.role === 'super_admin') && (
                     <Link to="/admin" onClick={() => setIsMenuOpen(false)} className={`block px-4 py-3 text-base font-medium border-l-4 ${isCurrentPath('/admin') ? 'text-white bg-ink-800 border-brand-500' : 'text-ink-300 border-transparent hover:text-white hover:bg-ink-800 hover:border-ink-600'}`}>Admin Dashboard</Link>
                   )}
                   {user.role === 'restaurant' && (

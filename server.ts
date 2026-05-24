@@ -98,12 +98,26 @@ const authenticateToken = (req: express.Request, res: express.Response, next: ex
 };
 
 // Role-based authorization middleware
-const authorizeRole = (roles: string[]) => {
-  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+const authorizeRole = (roles: string[], requiredFeature?: string) => {
+  return async (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const user = (req as any).user;
-    if (!user || !roles.includes(user.role)) {
+    if (!user || (!roles.includes(user.role) && user.role !== 'admin' && user.role !== 'super_admin')) {
       return res.status(403).json({ error: 'Access denied. Insufficient permissions.' });
     }
+    
+    // Check specific feature for platform admins
+    if (requiredFeature && user.role === 'admin') {
+      try {
+        const fullUser = await db.get('SELECT admin_permissions FROM users WHERE id = ?', [user.id]) as any;
+        const perms = fullUser?.admin_permissions ? JSON.parse(fullUser.admin_permissions) : [];
+        if (!perms.includes(requiredFeature)) {
+          return res.status(403).json({ error: 'Access denied. Missing required admin feature: ' + requiredFeature });
+        }
+      } catch (e) {
+        return res.status(500).json({ error: 'Failed to verify admin permissions.' });
+      }
+    }
+    
     next();
   };
 };
@@ -706,7 +720,7 @@ app.post('/api/auth/verify-email', async (req, res) => {
   }
 });
 
-app.patch('/api/admin/restaurants/:id/status', authenticateToken, authorizeRole(['admin', 'super_admin']), async (req, res) => {
+app.patch('/api/admin/restaurants/:id/status', authenticateToken, authorizeRole(['admin', 'super_admin'], 'restaurants'), async (req, res) => {
   const { status } = req.body;
   const restaurantId = req.params.id;
   
@@ -714,7 +728,7 @@ app.patch('/api/admin/restaurants/:id/status', authenticateToken, authorizeRole(
   res.json({ success: true, status });
 });
 
-app.patch('/api/admin/restaurants/:id', authenticateToken, authorizeRole(['admin', 'super_admin']), async (req, res) => {
+app.patch('/api/admin/restaurants/:id', authenticateToken, authorizeRole(['admin', 'super_admin'], 'restaurants'), async (req, res) => {
   const restaurantId = req.params.id;
   const updates = req.body;
   
@@ -752,7 +766,7 @@ app.patch('/api/admin/restaurants/:id', authenticateToken, authorizeRole(['admin
   }
 });
 
-app.get('/api/admin/analytics', authenticateToken, authorizeRole(['admin', 'super_admin']), async (req, res) => {
+app.get('/api/admin/analytics', authenticateToken, authorizeRole(['admin', 'super_admin'], 'analytics'), async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     let dateFilter = '';
@@ -895,8 +909,8 @@ app.get('/api/admin/analytics', authenticateToken, authorizeRole(['admin', 'supe
       LEFT JOIN orders o ON r.id = o.restaurant_id
       WHERE r.status = 'Active'
       GROUP BY r.id
-      HAVING last_activity IS NULL OR last_activity < datetime('now', '-48 hours')
-    `);
+      HAVING MAX(o.created_at) IS NULL OR MAX(o.created_at) < ?
+    `, [new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()]);
 
     res.json({
       totalRestaurants: totalRestaurants.count,
@@ -927,7 +941,7 @@ app.get('/api/admin/analytics', authenticateToken, authorizeRole(['admin', 'supe
   }
 });
 
-app.post('/api/admin/hero-slides', authenticateToken, authorizeRole(['super_admin', 'admin']), upload.single('image'), async (req, res) => {
+app.post('/api/admin/hero-slides', authenticateToken, authorizeRole(['admin', 'super_admin'], 'settings'), upload.single('image'), async (req, res) => {
   const { title, subtitle } = req.body;
   let image_url = req.body.image_url;
   if (req.file) {
@@ -942,7 +956,7 @@ app.post('/api/admin/hero-slides', authenticateToken, authorizeRole(['super_admi
   }
 });
 
-app.delete('/api/admin/hero-slides/:id', authenticateToken, authorizeRole(['super_admin', 'admin']), async (req, res) => {
+app.delete('/api/admin/hero-slides/:id', authenticateToken, authorizeRole(['admin', 'super_admin'], 'settings'), async (req, res) => {
   try {
     await db.run('DELETE FROM platform_hero_slides WHERE id = ?', [req.params.id]);
     res.json({ success: true });
@@ -951,7 +965,7 @@ app.delete('/api/admin/hero-slides/:id', authenticateToken, authorizeRole(['supe
   }
 });
 
-app.get('/api/admin/settings', authenticateToken, authorizeRole(['super_admin']), async (req, res) => {
+app.get('/api/admin/settings', authenticateToken, authorizeRole(['super_admin', 'admin'], 'settings'), async (req, res) => {
   try {
     const settings = await db.get('SELECT * FROM platform_settings LIMIT 1');
     res.json(settings || { default_currency: 'USD', notifications_enabled: 1 });
@@ -961,7 +975,7 @@ app.get('/api/admin/settings', authenticateToken, authorizeRole(['super_admin'])
   }
 });
 
-app.get('/api/admin/plans', authenticateToken, authorizeRole(['super_admin']), async (req, res) => {
+app.get('/api/admin/plans', authenticateToken, authorizeRole(['super_admin', 'admin'], 'plans'), async (req, res) => {
   try {
     const plans = await db.all('SELECT * FROM subscription_plans ORDER BY id ASC');
     res.json(plans);
@@ -971,7 +985,7 @@ app.get('/api/admin/plans', authenticateToken, authorizeRole(['super_admin']), a
   }
 });
 
-app.post('/api/admin/plans', authenticateToken, authorizeRole(['super_admin']), async (req, res) => {
+app.post('/api/admin/plans', authenticateToken, authorizeRole(['super_admin', 'admin'], 'plans'), async (req, res) => {
   const { plan_name, price_monthly, price_annual, max_waiters, max_monthly_orders, analytics_retention_days, can_export_tax_reports, is_vip_featured, can_use_online_payments, transaction_fee_percentage, is_pay_as_you_go } = req.body;
   
   try {
@@ -988,7 +1002,7 @@ app.post('/api/admin/plans', authenticateToken, authorizeRole(['super_admin']), 
   }
 });
 
-app.put('/api/admin/plans/:id', authenticateToken, authorizeRole(['super_admin']), async (req, res) => {
+app.put('/api/admin/plans/:id', authenticateToken, authorizeRole(['super_admin', 'admin'], 'plans'), async (req, res) => {
   const { id } = req.params;
   const { price_monthly, price_annual, max_waiters, max_monthly_orders, analytics_retention_days, can_export_tax_reports, is_vip_featured, can_use_online_payments, transaction_fee_percentage, is_pay_as_you_go } = req.body;
   
@@ -1006,7 +1020,7 @@ app.put('/api/admin/plans/:id', authenticateToken, authorizeRole(['super_admin']
   }
 });
 
-app.patch('/api/admin/settings', authenticateToken, authorizeRole(['super_admin']), async (req, res) => {
+app.patch('/api/admin/settings', authenticateToken, authorizeRole(['super_admin', 'admin'], 'settings'), async (req, res) => {
   const { default_currency, notifications_enabled, payment_paystack_enabled, paystack_public_key, paystack_secret_key, payment_monnify_enabled, monnify_api_key, monnify_secret_key, monnify_contract_code, payment_flutterwave_enabled, flutterwave_public_key, flutterwave_secret_key, simulate_order_enabled, global_copyright_footer } = req.body;
   
   const updates: string[] = [];
@@ -1629,7 +1643,7 @@ app.patch('/api/restaurants/:id/settings', authenticateToken, requireRestaurantA
   }
 });
 
-app.post('/api/admin/restaurants', authenticateToken, authorizeRole(['admin', 'super_admin']), async (req, res) => {
+app.post('/api/admin/restaurants', authenticateToken, authorizeRole(['admin', 'super_admin'], 'restaurants'), async (req, res) => {
   const { name, owner_email, owner_password, business_type } = req.body;
   if (!name || !owner_email || !owner_password) {
     return res.status(400).json({ error: 'Name, owner email, and owner password are required' });
@@ -1664,7 +1678,7 @@ app.post('/api/admin/restaurants', authenticateToken, authorizeRole(['admin', 's
   }
 });
 
-app.post('/api/admin/restaurants/:id/reset-password', authenticateToken, authorizeRole(['admin', 'super_admin']), async (req, res) => {
+app.post('/api/admin/restaurants/:id/reset-password', authenticateToken, authorizeRole(['admin', 'super_admin'], 'restaurants'), async (req, res) => {
   const { new_password } = req.body;
   if (!new_password) return res.status(400).json({ error: 'New password is required' });
 
@@ -1681,7 +1695,7 @@ app.post('/api/admin/restaurants/:id/reset-password', authenticateToken, authori
   }
 });
 
-app.delete('/api/admin/restaurants/:id', authenticateToken, authorizeRole(['super_admin']), async (req, res) => {
+app.delete('/api/admin/restaurants/:id', authenticateToken, authorizeRole(['super_admin', 'admin'], 'restaurants'), async (req, res) => {
   const restaurant_id = req.params.id;
   try {
     const transaction = db.transaction(async () => {
@@ -1713,7 +1727,7 @@ app.delete('/api/admin/restaurants/:id', authenticateToken, authorizeRole(['supe
   }
 });
 
-app.patch('/api/admin/restaurants/:id/verify-account', authenticateToken, authorizeRole(['admin', 'super_admin']), async (req, res) => {
+app.patch('/api/admin/restaurants/:id/verify-account', authenticateToken, authorizeRole(['admin', 'super_admin'], 'restaurants'), async (req, res) => {
   const { status } = req.body; // 0=Pending, 1=Verified, 2=Rejected
   const restaurant_id = parseInt(req.params.id);
   
@@ -1803,10 +1817,10 @@ app.get('/api/restaurants/:id/tables', authenticateToken, requireRestaurantAcces
 });
 
 // -- Admin User Management --
-app.get('/api/admin/users', authenticateToken, authorizeRole(['super_admin']), async (req, res) => {
+app.get('/api/admin/users', authenticateToken, authorizeRole(['admin', 'super_admin'], 'users'), async (req, res) => {
   try {
     const users = await db.all(`
-      SELECT u.id, u.email, u.role, u.name, u.phone_number, u.email_verified, r.name as restaurant_name
+      SELECT u.id, u.email, u.role, u.name, u.phone_number, u.email_verified, u.admin_permissions, r.name as restaurant_name
       FROM users u
       LEFT JOIN restaurants r ON u.restaurant_id = r.id
       ORDER BY u.id DESC
@@ -1818,9 +1832,9 @@ app.get('/api/admin/users', authenticateToken, authorizeRole(['super_admin']), a
   }
 });
 
-app.post('/api/admin/users', authenticateToken, authorizeRole(['super_admin']), async (req, res) => {
+app.post('/api/admin/users', authenticateToken, authorizeRole(['admin', 'super_admin'], 'users'), async (req, res) => {
   try {
-    const { email, password, role, name, restaurant_id } = req.body;
+    const { email, password, role, name, restaurant_id, admin_permissions } = req.body;
     
     // Check if email already exists
     const existing = await db.get('SELECT id FROM users WHERE email = ?', [email]);
@@ -1829,13 +1843,13 @@ app.post('/api/admin/users', authenticateToken, authorizeRole(['super_admin']), 
     }
 
     const insert = db.prepare(`
-      INSERT INTO users (email, password, role, name, restaurant_id, email_verified)
-      VALUES (?, ?, ?, ?, ?, 1)
+      INSERT INTO users (email, password, role, name, restaurant_id, email_verified, admin_permissions)
+      VALUES (?, ?, ?, ?, ?, 1, ?)
     `);
     
-    const result = await insert.run(email, password, role, name || null, restaurant_id || null);
+    const result = await insert.run(email, password, role, name || null, restaurant_id || null, admin_permissions ? JSON.stringify(admin_permissions) : '[]');
     const newUser = await db.get(`
-      SELECT u.id, u.email, u.role, u.name, u.phone_number, u.email_verified, r.name as restaurant_name
+      SELECT u.id, u.email, u.role, u.name, u.phone_number, u.email_verified, u.admin_permissions, r.name as restaurant_name
       FROM users u
       LEFT JOIN restaurants r ON u.restaurant_id = r.id
       WHERE u.id = ?
@@ -1848,13 +1862,13 @@ app.post('/api/admin/users', authenticateToken, authorizeRole(['super_admin']), 
   }
 });
 
-app.put('/api/admin/users/:id', authenticateToken, authorizeRole(['super_admin']), async (req, res) => {
+app.put('/api/admin/users/:id', authenticateToken, authorizeRole(['admin', 'super_admin'], 'users'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { role, name, password, restaurant_id } = req.body;
+    const { role, name, password, restaurant_id, admin_permissions } = req.body;
     
-    let query = 'UPDATE users SET role = ?, name = ?, restaurant_id = ?';
-    const params: any[] = [role, name || null, restaurant_id || null];
+    let query = 'UPDATE users SET role = ?, name = ?, restaurant_id = ?, admin_permissions = ?';
+    const params: any[] = [role, name || null, restaurant_id || null, admin_permissions ? JSON.stringify(admin_permissions) : '[]'];
     
     if (password) {
       query += ', password = ?';
@@ -1872,7 +1886,7 @@ app.put('/api/admin/users/:id', authenticateToken, authorizeRole(['super_admin']
   }
 });
 
-app.delete('/api/admin/users/:id', authenticateToken, authorizeRole(['super_admin']), async (req, res) => {
+app.delete('/api/admin/users/:id', authenticateToken, authorizeRole(['super_admin', 'admin'], 'users'), async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -1889,7 +1903,7 @@ app.delete('/api/admin/users/:id', authenticateToken, authorizeRole(['super_admi
   }
 });
 
-app.patch('/api/admin/users/:id/verify', authenticateToken, authorizeRole(['super_admin']), async (req, res) => {
+app.patch('/api/admin/users/:id/verify', authenticateToken, authorizeRole(['super_admin', 'admin'], 'users'), async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const transaction = db.transaction(async () => {

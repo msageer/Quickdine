@@ -44,6 +44,12 @@ export default function AdminDashboard() {
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const isSuperAdmin = user.role === 'super_admin';
+  let adminPermissions: string[] = [];
+  try {
+    adminPermissions = user.admin_permissions ? (typeof user.admin_permissions === 'string' ? JSON.parse(user.admin_permissions) : user.admin_permissions) : [];
+  } catch (e) {}
+
+  const hasFeatureAccess = (feature: string) => isSuperAdmin || adminPermissions.includes(feature);
 
   const handleAddRestaurant = async () => {
     try {
@@ -390,7 +396,7 @@ export default function AdminDashboard() {
         setIsAddUserModalOpen(false);
         setIsEditUserModalOpen(false);
         setSelectedUser(null);
-        setNewUser({ email: '', password: '', role: 'admin', name: '', restaurant_id: '' });
+        setNewUser({ email: '', password: '', role: 'admin', name: '', restaurant_id: '', admin_permissions: [] });
       } else {
         showToast(data.error || `Failed to ${selectedUser ? 'update' : 'add'} user`);
       }
@@ -439,7 +445,13 @@ export default function AdminDashboard() {
 
   const openEditUser = (user: any) => {
     setSelectedUser(user);
-    setNewUser({ ...user, password: '' }); // Don't show existing password
+    
+    let parsedPerms = [];
+    try {
+      parsedPerms = typeof user.admin_permissions === 'string' ? JSON.parse(user.admin_permissions) : (user.admin_permissions || []);
+    } catch (e) {}
+    
+    setNewUser({ ...user, password: '', admin_permissions: parsedPerms }); // Don't show existing password
     setIsEditUserModalOpen(true);
   };
 
@@ -460,14 +472,16 @@ export default function AdminDashboard() {
           <p className="text-xs text-brand-400 font-medium tracking-widest uppercase ml-11">Admin Portal</p>
         </div>
         <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
-          <button 
-            onClick={() => setActiveTab('restaurants')}
-            className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${activeTab === 'restaurants' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'hover:bg-ink-800 hover:text-white text-ink-400'}`}
-          >
-            <Store className={`mr-3 h-5 w-5 ${activeTab === 'restaurants' ? 'text-white' : 'text-ink-500'}`} />
-            Restaurants
-          </button>
-          {isSuperAdmin && (
+          {hasFeatureAccess('restaurants') && (
+            <button 
+              onClick={() => setActiveTab('restaurants')}
+              className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${activeTab === 'restaurants' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'hover:bg-ink-800 hover:text-white text-ink-400'}`}
+            >
+              <Store className={`mr-3 h-5 w-5 ${activeTab === 'restaurants' ? 'text-white' : 'text-ink-500'}`} />
+              Restaurants
+            </button>
+          )}
+          {hasFeatureAccess('users') && (
             <button 
               onClick={() => setActiveTab('users')}
               className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${activeTab === 'users' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'hover:bg-ink-800 hover:text-white text-ink-400'}`}
@@ -476,44 +490,56 @@ export default function AdminDashboard() {
               Users
             </button>
           )}
-          <button 
-            onClick={() => setActiveTab('analytics')}
-            className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${activeTab === 'analytics' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'hover:bg-ink-800 hover:text-white text-ink-400'}`}
-          >
-            <Activity className={`mr-3 h-5 w-5 ${activeTab === 'analytics' ? 'text-white' : 'text-ink-500'}`} />
-            Analytics
-          </button>
-          {isSuperAdmin && (
+          {hasFeatureAccess('analytics') && (
+            <button 
+              onClick={() => setActiveTab('analytics')}
+              className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${activeTab === 'analytics' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'hover:bg-ink-800 hover:text-white text-ink-400'}`}
+            >
+              <Activity className={`mr-3 h-5 w-5 ${activeTab === 'analytics' ? 'text-white' : 'text-ink-500'}`} />
+              Analytics
+            </button>
+          )}
+
+          {(hasFeatureAccess('settings') || hasFeatureAccess('plans')) && (
             <div className="pt-4 mt-4 border-t border-ink-800">
               <p className="px-4 text-xs font-semibold text-ink-500 uppercase tracking-wider mb-2">System</p>
-              <button 
-                onClick={() => setActiveTab('settings')}
-                className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${activeTab === 'settings' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'hover:bg-ink-800 hover:text-white text-ink-400'}`}
-              >
-                <Settings className={`mr-3 h-5 w-5 ${activeTab === 'settings' ? 'text-white' : 'text-ink-500'}`} />
-                Settings
-              </button>
-              <button 
-                onClick={() => setActiveTab('pricing')}
-                className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${activeTab === 'pricing' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'hover:bg-ink-800 hover:text-white text-ink-400'}`}
-              >
-                <CreditCard className={`mr-3 h-5 w-5 ${activeTab === 'pricing' ? 'text-white' : 'text-ink-500'}`} />
-                Pricing Plans
-              </button>
-              <button 
-                onClick={() => setActiveTab('slides')}
-                className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${activeTab === 'slides' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'hover:bg-ink-800 hover:text-white text-ink-400'}`}
-              >
-                <Image className={`mr-3 h-5 w-5 ${activeTab === 'slides' ? 'text-white' : 'text-ink-500'}`} />
-                Home Slider
-              </button>
-              <button 
-                onClick={() => setActiveTab('profile')}
-                className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${activeTab === 'profile' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'hover:bg-ink-800 hover:text-white text-ink-400'}`}
-              >
-                <User className={`mr-3 h-5 w-5 ${activeTab === 'profile' ? 'text-white' : 'text-ink-500'}`} />
-                Profile
-              </button>
+              
+              {hasFeatureAccess('settings') && (
+                <button 
+                  onClick={() => setActiveTab('settings')}
+                  className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${activeTab === 'settings' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'hover:bg-ink-800 hover:text-white text-ink-400'}`}
+                >
+                  <Settings className={`mr-3 h-5 w-5 ${activeTab === 'settings' ? 'text-white' : 'text-ink-500'}`} />
+                  Settings
+                </button>
+              )}
+              {hasFeatureAccess('plans') && (
+                <button 
+                  onClick={() => setActiveTab('pricing')}
+                  className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${activeTab === 'pricing' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'hover:bg-ink-800 hover:text-white text-ink-400'}`}
+                >
+                  <CreditCard className={`mr-3 h-5 w-5 ${activeTab === 'pricing' ? 'text-white' : 'text-ink-500'}`} />
+                  Pricing Plans
+                </button>
+              )}
+              {hasFeatureAccess('settings') && (
+                <button 
+                  onClick={() => setActiveTab('slides')}
+                  className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${activeTab === 'slides' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'hover:bg-ink-800 hover:text-white text-ink-400'}`}
+                >
+                  <Image className={`mr-3 h-5 w-5 ${activeTab === 'slides' ? 'text-white' : 'text-ink-500'}`} />
+                  Home Slider
+                </button>
+              )}
+              {isSuperAdmin && (
+                <button 
+                  onClick={() => setActiveTab('profile')}
+                  className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${activeTab === 'profile' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'hover:bg-ink-800 hover:text-white text-ink-400'}`}
+                >
+                  <User className={`mr-3 h-5 w-5 ${activeTab === 'profile' ? 'text-white' : 'text-ink-500'}`} />
+                  My Profile
+                </button>
+              )}
             </div>
           )}
         </nav>
@@ -2322,7 +2348,7 @@ export default function AdminDashboard() {
                     setIsAddUserModalOpen(false);
                     setIsEditUserModalOpen(false);
                     setSelectedUser(null);
-                    setNewUser({ email: '', password: '', role: 'admin', name: '', restaurant_id: '' });
+                    setNewUser({ email: '', password: '', role: 'admin', name: '', restaurant_id: '', admin_permissions: [] });
                   }} 
                   className="p-2 hover:bg-ink-100 rounded-full transition-colors"
                 >
@@ -2399,6 +2425,37 @@ export default function AdminDashboard() {
                   </div>
                 )}
                 
+                {newUser.role === 'admin' && (
+                  <div className="bg-ink-50 p-4 rounded-xl border border-ink-100">
+                    <label className="block text-sm font-bold text-ink-900 mb-3 border-b border-ink-100 pb-2 flex items-center gap-2"><Key className="w-4 h-4 text-brand-500"/> Platform Permissions</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { id: 'restaurants', label: 'Restaurants Mgmt' },
+                        { id: 'users', label: 'Users Mgmt' },
+                        { id: 'analytics', label: 'View Analytics' },
+                        { id: 'settings', label: 'Platform Settings' },
+                        { id: 'plans', label: 'Pricing Plans' }
+                      ].map(perm => (
+                        <label key={perm.id} className="flex items-center gap-2 text-sm text-ink-700 cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            checked={(newUser.admin_permissions || []).includes(perm.id)}
+                            onChange={(e) => {
+                              const current = newUser.admin_permissions || [];
+                              const perms = e.target.checked 
+                                ? [...current, perm.id] 
+                                : current.filter((p: string) => p !== perm.id);
+                              setNewUser({...newUser, admin_permissions: perms});
+                            }}
+                            className="rounded border-ink-300 text-brand-500 focus:ring-brand-500 w-4 h-4 cursor-pointer" 
+                          />
+                          <span className="select-none font-medium text-ink-800">{perm.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
                 <div className="pt-6 border-t border-ink-100 flex justify-end gap-3">
                   <button 
                     type="button"
@@ -2406,7 +2463,7 @@ export default function AdminDashboard() {
                       setIsAddUserModalOpen(false);
                       setIsEditUserModalOpen(false);
                       setSelectedUser(null);
-                      setNewUser({ email: '', password: '', role: 'admin', name: '', restaurant_id: '' });
+                      setNewUser({ email: '', password: '', role: 'admin', name: '', restaurant_id: '', admin_permissions: [] });
                     }}
                     className="px-4 py-2 text-ink-600 font-bold hover:bg-ink-100 rounded-xl transition-colors"
                   >
