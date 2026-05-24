@@ -41,7 +41,7 @@ export default function Login() {
           // Ignore
         }
         
-        if (data.user.role === 'admin') {
+        if (data.user.role === 'admin' || data.user.role === 'super_admin') {
           navigate('/admin');
         } else if (data.user.role === 'restaurant') {
           navigate(`/restaurant/${data.user.restaurant_id}`);
