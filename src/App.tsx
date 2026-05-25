@@ -21,32 +21,32 @@ import ProtectedRoute from './components/ProtectedRoute';
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Home />} />
-          <Route path="login" element={<Login />} />
-          <Route path="signup" element={<Signup />} />
-          <Route path="verify-email" element={<VerifyEmail />} />
-          <Route path="order" element={<CustomerMenu />} />
-          <Route path="orders" element={<CustomerOrders />} />
-          <Route path="profile" element={<CustomerOrders />} />
-          <Route path="track/:orderId" element={<OrderTracking />} />
-          <Route path="directory" element={<RestaurantDirectory />} />
-          
-          <Route element={<ProtectedRoute allowedRoles={['restaurant']} />}>
-            <Route path="restaurant/:id" element={<RestaurantDashboard />} />
+        <Routes>
+          <Route path="/" element={<Layout />}>
+            <Route index element={<Home />} />
+            <Route path="login" element={<Login />} />
+            <Route path="signup" element={<Signup />} />
+            <Route path="verify-email" element={<VerifyEmail />} />
+            <Route path="order" element={<CustomerMenu />} />
+            <Route path="orders" element={<CustomerOrders />} />
+            <Route path="profile" element={<CustomerOrders />} />
+            <Route path="track/:orderId" element={<OrderTracking />} />
+            <Route path="directory" element={<RestaurantDirectory />} />
+            
+            <Route element={<ProtectedRoute allowedRoles={['restaurant']} />}>
+              <Route path="restaurant/:id" element={<RestaurantDashboard />} />
+            </Route>
+            
+            <Route element={<ProtectedRoute allowedRoles={['waiter']} />}>
+              <Route path="waiter/:id" element={<WaiterDashboard />} />
+            </Route>
+            
+            <Route element={<ProtectedRoute allowedRoles={['admin', 'super_admin']} />}>
+              <Route path="admin" element={<AdminDashboard />} />
+            </Route>
           </Route>
-          
-          <Route element={<ProtectedRoute allowedRoles={['waiter']} />}>
-            <Route path="waiter/:id" element={<WaiterDashboard />} />
-          </Route>
-          
-          <Route element={<ProtectedRoute allowedRoles={['admin', 'super_admin']} />}>
-            <Route path="admin" element={<AdminDashboard />} />
-          </Route>
-        </Route>
-      </Routes>
-    </BrowserRouter>
+        </Routes>
+      </BrowserRouter>
   );
 }
 

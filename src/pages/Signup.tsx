@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Utensils, Lock, Mail, Store, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { signInWithGoogle } from '../firebase';
 
 export default function Signup() {
   const [email, setEmail] = useState('');
@@ -12,6 +13,42 @@ export default function Signup() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const navigate = useNavigate();
+
+  const handleGoogleSignup = async () => {
+    try {
+      const result = await signInWithGoogle();
+      setLoading(true);
+      setError('');
+      const token = await result.user.getIdToken();
+
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          credential: token,
+          restaurantName,
+          businessType
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        navigate(`/restaurant/${data.user.restaurant_id}`);
+      } else {
+        setError(data.error || 'Google auth failed');
+      }
+    } catch (err: any) {
+      if (err.code === 'auth/popup-blocked') {
+        setError('Popup blocked. Please open this app in a new tab (click the icon in the top right) to sign in with Google.');
+      } else {
+        setError(err.message || 'Network error during Google auth.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -197,6 +234,32 @@ export default function Signup() {
               </button>
             </div>
           </form>
+
+          <div className="mt-6">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-ink-200" />
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white text-ink-500">Or continue with</span>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-center">
+              <button
+                type="button"
+                onClick={handleGoogleSignup}
+                disabled={loading}
+                className="w-full flex justify-center items-center gap-3 py-2.5 px-4 border border-ink-200 rounded-xl shadow-sm text-sm font-medium text-ink-700 bg-white hover:bg-ink-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 disabled:opacity-50 transition-colors"
+              >
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
+                Sign in with Google
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-center text-ink-500">
+              Your Business Name and Type above will be used if creating a new account.
+            </p>
+          </div>
         </motion.div>
       </div>
     </div>

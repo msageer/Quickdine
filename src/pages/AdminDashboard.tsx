@@ -5,7 +5,9 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { fetchWithRetry, apiFetch } from '../lib/utils';
 
 export default function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState('restaurants');
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [adminDashboardData, setAdminDashboardData] = useState<any>(null);
+  const [adminDashboardLoading, setAdminDashboardLoading] = useState(true);
   const [restaurants, setRestaurants] = useState<any[]>([]);
   const [selectedRestaurant, setSelectedRestaurant] = useState<any>(null);
   const [isEditingRestaurant, setIsEditingRestaurant] = useState(false);
@@ -213,6 +215,20 @@ export default function AdminDashboard() {
     }
   };
 
+  const fetchAdminDashboard = async () => {
+    try {
+      setAdminDashboardLoading(true);
+      const res = await fetchWithRetry('/api/admin/dashboard');
+      if (res.ok) {
+        setAdminDashboardData(await res.json());
+      }
+    } catch (err) {
+      console.error('Error fetching admin dashboard:', err);
+    } finally {
+      setAdminDashboardLoading(false);
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -232,10 +248,14 @@ export default function AdminDashboard() {
           fetchWithRetry('/api/hero-slides').catch(err => {
             console.error('Network error fetching slides:', err);
             throw err;
+          }),
+          fetchWithRetry('/api/admin/dashboard').catch(err => {
+            console.error('Network error fetching admin dashboard:', err);
+            throw err;
           })
         ]);
         
-        const [resRestaurants, resSettings, resPlans, resSlides] = results;
+        const [resRestaurants, resSettings, resPlans, resSlides, resDashboard] = results;
         
         if (resRestaurants.status === 'fulfilled' && resRestaurants.value.ok) {
           setRestaurants(await resRestaurants.value.json());
@@ -249,10 +269,15 @@ export default function AdminDashboard() {
         if (resSlides.status === 'fulfilled' && resSlides.value.ok) {
           setSlides(await resSlides.value.json());
         }
+        if (resDashboard.status === 'fulfilled' && resDashboard.value.ok) {
+          setAdminDashboardData(await resDashboard.value.json());
+        }
 
+        setAdminDashboardLoading(false);
         await fetchAnalytics();
       } catch (err) {
         console.error('Failed to fetch data', err);
+        setAdminDashboardLoading(false);
       }
     };
     fetchData();
@@ -472,6 +497,13 @@ export default function AdminDashboard() {
           <p className="text-xs text-brand-400 font-medium tracking-widest uppercase ml-11">Admin Portal</p>
         </div>
         <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
+          <button 
+            onClick={() => setActiveTab('dashboard')}
+            className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${activeTab === 'dashboard' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'hover:bg-ink-800 hover:text-white text-ink-400'}`}
+          >
+            <BarChart3 className={`mr-3 h-5 w-5 ${activeTab === 'dashboard' ? 'text-white' : 'text-ink-500'}`} />
+            Global Dashboard
+          </button>
           {hasFeatureAccess('restaurants') && (
             <button 
               onClick={() => setActiveTab('restaurants')}
@@ -560,6 +592,240 @@ export default function AdminDashboard() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         <main className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8">
+          {activeTab === 'dashboard' && (
+            <div className="space-y-8 max-w-7xl mx-auto">
+              <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-ink-100 animate-fadeIn">
+                <div>
+                  <h1 className="text-2xl font-bold text-ink-900 font-serif">Global Platform Overview</h1>
+                  <p className="text-ink-500 text-sm mt-1">Macro monitoring dashboard for QuickDine Nigeria platform engine.</p>
+                </div>
+                <button 
+                  onClick={fetchAdminDashboard}
+                  className="bg-brand-50 hover:bg-brand-100 text-brand-700 font-bold px-4 py-2 rounded-xl text-sm transition-colors"
+                >
+                  Refresh Data
+                </button>
+              </div>
+
+              {adminDashboardLoading ? (
+                <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-ink-100 shadow-sm">
+                  <Activity className="h-10 w-10 text-brand-500 animate-pulse mb-3" />
+                  <p className="text-ink-600 font-medium">Assembling platform statistics...</p>
+                </div>
+              ) : adminDashboardData ? (
+                <>
+                  {/* Top Level Metric Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-ink-200">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-ink-500 font-medium text-sm uppercase tracking-wider">Total Platform GMV</h3>
+                        <div className="p-2 bg-brand-50 text-brand-600 rounded-xl border border-brand-100">
+                          <DollarSign className="w-5 h-5" />
+                        </div>
+                      </div>
+                      <p className="text-3xl font-bold text-ink-900">
+                        {getCurrencySymbol(settings.default_currency)}
+                        {Number(adminDashboardData.platformGmv || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                      <div className="text-xs text-brand-600 font-medium mt-1">Aggregate value processing</div>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-ink-200">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-ink-500 font-medium text-sm uppercase tracking-wider">Platform VAT Collected</h3>
+                        <div className="p-2 bg-amber-50 text-amber-600 rounded-xl border border-amber-100">
+                          <Receipt className="w-5 h-5" />
+                        </div>
+                      </div>
+                      <p className="text-3xl font-bold text-ink-900">
+                        {getCurrencySymbol(settings.default_currency)}
+                        {Number(adminDashboardData.totalVat || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                      <div className="text-xs text-amber-600 font-medium mt-1">7.5% aggregate compliance audit</div>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-ink-200">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-ink-500 font-medium text-sm uppercase tracking-wider">Active Restaurants</h3>
+                        <div className="p-2 bg-green-50 text-green-600 rounded-xl border border-green-100">
+                          <Store className="w-5 h-5" />
+                        </div>
+                      </div>
+                      <p className="text-3xl font-bold text-ink-900">
+                        {adminDashboardData.totalActiveRestaurants}
+                      </p>
+                      <div className="text-xs text-green-600 font-medium mt-1">Verified on-platform nodes</div>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-ink-200">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-ink-500 font-medium text-sm uppercase tracking-wider">Subscription MRR</h3>
+                        <div className="p-2 bg-blue-50 text-blue-600 rounded-xl border border-blue-100">
+                          <TrendingUp className="w-5 h-5" />
+                        </div>
+                      </div>
+                      <p className="text-3xl font-bold text-ink-900">
+                        {getCurrencySymbol(settings.default_currency)}
+                        {Number(adminDashboardData.subscriptionMrr || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                      <div className="text-xs text-blue-600 font-medium mt-1">Monthly recurring subscription feed</div>
+                    </div>
+                  </div>
+
+                  {/* Visual Charts Area */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Platform GMV Velocity & Signup growth */}
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-ink-200">
+                      <h3 className="font-bold text-lg text-ink-900 mb-6 font-serif flex items-center gap-2">
+                        <TrendingUp className="w-5 h-5 text-brand-600" /> Platform Financial Velocity (GMV)
+                      </h3>
+                      <div className="h-72">
+                        {adminDashboardData.dailyGmvTrend?.length > 0 ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={adminDashboardData.dailyGmvTrend}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                              <XAxis dataKey="date" stroke="#9CA3AF" fontSize={11} tickLine={false} />
+                              <YAxis stroke="#9CA3AF" fontSize={11} tickLine={false} />
+                              <Tooltip content={<CustomTooltip prefix={getCurrencySymbol(settings.default_currency)} />} />
+                              <Line type="monotone" dataKey="gmv" name="Daily GMV" stroke="#D32F2F" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="h-full flex items-center justify-center text-ink-400 text-sm">No GMV data collected over past 30 days.</div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-ink-200">
+                      <h3 className="font-bold text-lg text-ink-900 mb-6 font-serif flex items-center gap-2">
+                        <UserPlus className="w-5 h-5 text-brand-600" /> Merchant Onboarding Velocity
+                      </h3>
+                      <div className="h-72">
+                        {adminDashboardData.recentSignups?.length > 0 ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={adminDashboardData.recentSignups}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                              <XAxis dataKey="date" stroke="#9CA3AF" fontSize={11} tickLine={false} />
+                              <YAxis stroke="#9CA3AF" fontSize={11} tickLine={false} />
+                              <Tooltip content={<CustomTooltip />} />
+                              <Line type="monotone" dataKey="count" name="Registration Speed" stroke="#2E7D32" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="h-full flex items-center justify-center text-ink-400 text-sm">No registrations registered over past 30 days.</div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-ink-200 lg:col-span-2">
+                      <h3 className="font-bold text-lg text-ink-900 mb-6 font-serif flex items-center gap-2">
+                        <Activity className="w-5 h-5 text-brand-600" /> Weekly On-Platform Staff Logins
+                      </h3>
+                      <div className="h-72">
+                        {adminDashboardData.weeklyLogins?.length > 0 ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={adminDashboardData.weeklyLogins}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                              <XAxis dataKey="week" stroke="#9CA3AF" fontSize={11} tickLine={false} />
+                              <YAxis stroke="#9CA3AF" fontSize={11} tickLine={false} />
+                              <Tooltip content={<CustomTooltip />} />
+                              <Bar dataKey="logins" name="Weekly Logins" fill="#004D40" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="h-full flex items-center justify-center text-ink-400 text-sm">No activity login tracking logged.</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Merchant Registrations Approval Table */}
+                  <div className="bg-white rounded-2xl shadow-sm border border-ink-200 overflow-hidden">
+                    <div className="px-6 py-5 border-b border-ink-100 flex justify-between items-center">
+                      <h3 className="font-bold text-lg text-ink-900 font-serif">Recent Merchant Registrations</h3>
+                      <span className="text-xs font-semibold text-ink-500 bg-ink-100 px-3 py-1 rounded-full">New Accounts Logs</span>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-ink-200">
+                        <thead className="bg-ink-50/50">
+                          <tr>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-ink-500 uppercase tracking-wider">Merchant Name</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-ink-500 uppercase tracking-wider">Contact Email</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-ink-500 uppercase tracking-wider">Registered Date</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-ink-500 uppercase tracking-wider">Business Type</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-ink-500 uppercase tracking-wider">Registration Status</th>
+                            <th className="px-6 py-4 text-right text-xs font-semibold text-ink-500 uppercase tracking-wider">Quick Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-ink-100">
+                          {adminDashboardData.recentMerchantApprovals?.map((r: any) => (
+                            <tr key={r.id} className="hover:bg-ink-50/30 transition-colors">
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-ink-900">{r.name}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-ink-500">{r.owner_email || 'Google Single-SignOn'}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-ink-500">
+                                {new Date(r.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-ink-900 font-medium capitalize">{r.business_type}</td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`px-2.5 py-1 inline-flex text-xs leading-5 font-bold rounded-full ${
+                                  r.status === 'Active' ? 'bg-brand-50 text-brand-700 border border-brand-200' :
+                                  r.status === 'Pending' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                                  'bg-red-50 text-red-700 border border-red-200'
+                                }`}>
+                                  {r.status}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <div className="flex justify-end gap-2">
+                                  {r.status === 'Pending' && (
+                                    <>
+                                      <button 
+                                        onClick={async () => {
+                                          await updateRestaurantStatus(r.id, 'Active');
+                                          await fetchAdminDashboard();
+                                        }}
+                                        className="text-brand-700 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                                      >
+                                        Approve
+                                      </button>
+                                      <button 
+                                        onClick={async () => {
+                                          await updateRestaurantStatus(r.id, 'Rejected');
+                                          await fetchAdminDashboard();
+                                        }}
+                                        className="text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                                      >
+                                        Reject
+                                      </button>
+                                    </>
+                                  )}
+                                  <button 
+                                    onClick={() => {
+                                      const found = restaurants.find(item => item.id === r.id);
+                                      if (found) setSelectedRestaurant(found);
+                                      setActiveTab('restaurants');
+                                    }}
+                                    className="text-white bg-ink-900 hover:bg-ink-800 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                                  >
+                                    Inspect Details
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-20 bg-white rounded-3xl border border-ink-100 shadow-sm">
+                  <p className="text-ink-500 font-medium">Failed to retrieve platform overview. Please try reload.</p>
+                </div>
+              )}
+            </div>
+          )}
+
           {activeTab === 'restaurants' && (
             <div className="space-y-8 max-w-7xl mx-auto">
               <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-ink-100">
@@ -1085,6 +1351,34 @@ export default function AdminDashboard() {
                             <Tooltip content={<CustomTooltip />} cursor={{fill: '#f3f4f6'}} />
                             <Bar dataKey="orders_handled" name="Orders Handled" fill="#8b5cf6" radius={[0, 4, 4, 0]} barSize={24} />
                           </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-ink-200">
+                      <h3 className="text-lg font-bold text-ink-900 mb-6 flex items-center">
+                        <CreditCard className="w-5 h-5 mr-2 text-brand-500" />
+                        Subscription Distribution
+                      </h3>
+                      <div className="h-72">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={analytics.subscriptionDistribution || []}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={60}
+                              outerRadius={80}
+                              paddingAngle={5}
+                              dataKey="count"
+                              nameKey="planName"
+                            >
+                              {(analytics.subscriptionDistribution || []).map((entry: any, index: number) => (
+                                <Cell key={`cell-${index}`} fill={['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444'][index % 5]} />
+                              ))}
+                            </Pie>
+                            <Tooltip content={<CustomTooltip />} />
+                            <Legend />
+                          </PieChart>
                         </ResponsiveContainer>
                       </div>
                     </div>

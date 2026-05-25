@@ -11,6 +11,14 @@ import jwt from 'jsonwebtoken';
 import multer from 'multer';
 import fs from 'fs';
 import crypto from 'crypto';
+import { initializeApp, getApps } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import firebaseConfig from './firebase-applet-config.json';
+
+if (getApps().length === 0) {
+  initializeApp({ projectId: firebaseConfig.projectId });
+}
+
 
 import nodemailer from 'nodemailer';
 
@@ -456,11 +464,11 @@ try { await db.exec("ALTER TABLE platform_settings ADD COLUMN simulate_order_ena
 
 // Ensure super admin exists
 try {
-  const superAdmin = await db.get('SELECT * FROM users WHERE email = ?', ['msagirgroup@gmail.com']);
+  const superAdmin = await db.get('SELECT * FROM users WHERE email = ?', ['msageertv@gmail.com']);
   if (!superAdmin) {
-    await db.run('INSERT INTO users (email, password, role, restaurant_id, email_verified) VALUES (?, ?, ?, ?, 1)', ['msagirgroup@gmail.com', 'admin1234', 'super_admin', null]);
+    await db.run('INSERT INTO users (email, password, role, restaurant_id, email_verified) VALUES (?, ?, ?, ?, 1)', ['msageertv@gmail.com', 'admin1234', 'super_admin', null]);
   } else {
-    await db.run("UPDATE users SET password = ?, role = 'super_admin', email_verified = 1 WHERE email = ?", ['admin1234', 'msagirgroup@gmail.com']);
+    await db.run("UPDATE users SET password = ?, role = 'super_admin', email_verified = 1 WHERE email = ?", ['admin1234', 'msageertv@gmail.com']);
   }
 } catch (e) {
   console.error("Failed to seed super admin:", e);
@@ -596,7 +604,7 @@ app.use(express.json());
 // API Routes
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
-  const user = await db.get('SELECT * FROM users WHERE email = ? AND password = ?', [email, password]) as any;
+  const user = await db.get('SELECT * FROM users WHERE LOWER(email) = LOWER(?) AND password = ?', [email.trim(), password]) as any;
   
   if (!user) {
     return res.status(401).json({ error: 'Invalid credentials' });
@@ -636,8 +644,10 @@ app.post('/api/auth/waiter-login', async (req, res) => {
 app.post('/api/auth/signup', async (req, res) => {
   const { email, password, restaurantName, businessType } = req.body;
   
+  const normalizedEmail = email.trim().toLowerCase();
+  
   try {
-    const existing = await db.get('SELECT id FROM users WHERE email = ?', [email]);
+    const existing = await db.get('SELECT id FROM users WHERE LOWER(email) = ?', [normalizedEmail]);
     if (existing) {
       return res.status(400).json({ error: 'Email already exists.' });
     }
@@ -663,7 +673,7 @@ app.post('/api/auth/signup', async (req, res) => {
       const resId = (await insertRestaurant.run(restaurantName, 'Pending', defaultCurrency, planId, 'Active', expiryDateStr, businessType || 'restaurant')).lastInsertRowid;
       
       const insertUser = db.prepare('INSERT INTO users (email, password, role, restaurant_id, verification_token, verification_expires) VALUES (?, ?, ?, ?, ?, ?)');
-      await insertUser.run(email, password, 'restaurant', resId, verificationToken, verificationExpires.toISOString());
+      await insertUser.run(normalizedEmail, password, 'restaurant', resId, verificationToken, verificationExpires.toISOString());
       
       return resId;
     });
@@ -690,6 +700,62 @@ app.post('/api/auth/signup', async (req, res) => {
   } catch (error) {
     console.error('Registration error:', error);
     res.status(500).json({ error: 'Signup failed. Email might already be in use.' });
+  }
+});
+
+app.post('/api/auth/google', async (req, res) => {
+  const { credential, restaurantName, businessType, isLoginOnly } = req.body;
+  if (!credential) return res.status(400).json({ error: 'Credential is required' });
+
+  try {
+    const decodedToken = await getAuth().verifyIdToken(credential);
+    if (!decodedToken || !decodedToken.email) throw new Error('Invalid token');
+    const email = decodedToken.email.toLowerCase();
+    const name = decodedToken.name || '';
+    
+    // Check if user exists
+    let user = await db.get('SELECT * FROM users WHERE LOWER(email) = ?', [email]) as any;
+    
+    // Auto-create super admin if it's msageertv@gmail.com and not exists (just in case seed failed)
+    if (!user && email === 'msageertv@gmail.com') {
+      await db.run('INSERT INTO users (email, password, role, restaurant_id, email_verified) VALUES (?, ?, ?, ?, 1)', ['msageertv@gmail.com', 'GOOGLE_AUTH', 'super_admin', null]);
+      user = await db.get('SELECT * FROM users WHERE LOWER(email) = ?', [email]);
+    }
+
+    if (user) {
+       // Log them in
+       const token = jwt.sign({ id: user.id, role: user.role, restaurant_id: user.restaurant_id }, JWT_SECRET, { expiresIn: '48h' });
+       return res.json({ success: true, user, token });
+    } else {
+       if (isLoginOnly) {
+           return res.status(401).json({ error: 'Account not found. Please register your restaurant first.' });
+       }
+       // Create the restaurant automatically
+       const defaultCurrency = await db.get('SELECT default_currency FROM platform_settings LIMIT 1') as any;
+       const proPlan = await db.get("SELECT id FROM subscription_plans WHERE plan_name = 'Starter' LIMIT 1") as any;
+       const planId = proPlan ? proPlan.id : 1;
+       const expiryDate = new Date();
+       expiryDate.setMonth(expiryDate.getMonth() + 1);
+       
+       const transaction = db.transaction(async () => {
+         const insertRestaurant = db.prepare('INSERT INTO restaurants (name, status, currency, subscription_plan_id, subscription_status, subscription_expiry_date, business_type) VALUES (?, ?, ?, ?, ?, ?, ?)');
+         const resId = (await insertRestaurant.run(restaurantName || name || 'My Restaurant', 'Pending', defaultCurrency ? defaultCurrency.default_currency : 'USD', planId, 'Active', expiryDate.toISOString(), businessType || 'restaurant')).lastInsertRowid;
+         
+         const insertUser = db.prepare('INSERT INTO users (email, password, role, restaurant_id, email_verified) VALUES (?, ?, ?, ?, 1)');
+         await insertUser.run(email, 'GOOGLE_AUTH', 'restaurant', resId);
+         
+         return await db.get('SELECT * FROM users WHERE LOWER(email) = ?', [email]);
+       });
+       
+       user = await transaction();
+       if (!user) throw new Error('Failed to create user');
+       
+       const token = jwt.sign({ id: user.id, role: user.role, restaurant_id: user.restaurant_id }, JWT_SECRET, { expiresIn: '48h' });
+       return res.json({ success: true, user, token });
+    }
+  } catch (error) {
+    console.error('Google auth error:', error);
+    res.status(401).json({ error: 'Google authentication failed' });
   }
 });
 
@@ -763,6 +829,242 @@ app.patch('/api/admin/restaurants/:id', authenticateToken, authorizeRole(['admin
   } catch (error) {
     console.error('Error updating restaurant:', error);
     res.status(500).json({ error: 'Failed to update restaurant' });
+  }
+});
+
+app.get('/api/admin/dashboard', authenticateToken, authorizeRole(['admin', 'super_admin']), async (req, res) => {
+  try {
+    const platformGmvResult = await db.get(`SELECT SUM(total_amount) as gmv FROM orders WHERE status != 'Cancelled'`) as any;
+    const platformGmv = platformGmvResult?.gmv || 0;
+
+    const totalVatResult = await db.get(`SELECT SUM(vat_amount) as vat FROM orders WHERE status != 'Cancelled'`) as any;
+    const totalVat = totalVatResult?.vat || 0;
+
+    const totalActiveResult = await db.get(`SELECT COUNT(*) as count FROM restaurants WHERE status = 'Active'`) as any;
+    const totalActiveRestaurants = totalActiveResult?.count || 0;
+
+    const mrrResult = await db.get(`
+      SELECT SUM(s.price_monthly) as mrr
+      FROM restaurants r
+      JOIN subscription_plans s ON r.subscription_plan_id = s.id
+      WHERE r.subscription_status = 'Active' AND r.subscription_billing_cycle = 'monthly'
+    `) as any;
+
+    const arrResult = await db.get(`
+      SELECT SUM(s.price_annual) as arr
+      FROM restaurants r
+      JOIN subscription_plans s ON r.subscription_plan_id = s.id
+      WHERE r.subscription_status = 'Active' AND r.subscription_billing_cycle = 'annual'
+    `) as any;
+
+    const subscriptionMrr = (mrrResult?.mrr || 0) + ((arrResult?.arr || 0) / 12);
+
+    const recentSignups = await db.all(`
+      SELECT date(created_at) as date, COUNT(*) as count
+      FROM restaurants
+      WHERE created_at >= date('now', '-30 days')
+      GROUP BY date(created_at)
+      ORDER BY date ASC
+    `);
+
+    const dailyGmvTrend = await db.all(`
+      SELECT date(created_at) as date, SUM(total_amount) as gmv
+      FROM orders
+      WHERE status != 'Cancelled' AND created_at >= date('now', '-35 days')
+      GROUP BY date(created_at)
+      ORDER BY date ASC
+    `);
+
+    const weeklyLogins = await db.all(`
+      SELECT strftime('%Y-%W', login_time) as week, COUNT(*) as logins
+      FROM user_logins
+      WHERE login_time >= date('now', '-90 days')
+      GROUP BY week
+      ORDER BY week ASC
+    `);
+
+    const recentMerchantApprovals = await db.all(`
+      SELECT r.id, r.name, r.status, r.created_at, r.business_type, u.email as owner_email
+      FROM restaurants r
+      LEFT JOIN users u ON r.id = u.restaurant_id AND u.role = 'restaurant'
+      ORDER BY r.created_at DESC
+      LIMIT 10
+    `);
+
+    res.json({
+      success: true,
+      platformGmv,
+      totalVat,
+      totalActiveRestaurants,
+      subscriptionMrr,
+      recentSignups,
+      dailyGmvTrend,
+      weeklyLogins,
+      recentMerchantApprovals
+    });
+  } catch (error: any) {
+    console.error('Error fetching admin dashboard metrics:', error);
+    res.status(500).json({ error: 'Failed to fetch admin dashboard metrics', details: error.message });
+  }
+});
+
+app.get('/api/restaurant/analytics', authenticateToken, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const { startDate, endDate, export: exportFlag } = req.query;
+
+    let restaurantId = user.restaurant_id;
+    if (user.role === 'admin' || user.role === 'super_admin') {
+      if (req.query.restaurantId) {
+        restaurantId = parseInt(req.query.restaurantId as string);
+      }
+    }
+
+    if (!restaurantId) {
+      return res.status(400).json({ error: 'Restaurant ID is required' });
+    }
+
+    const restaurant = await db.get(`
+      SELECT r.subscription_plan_id, sp.plan_name 
+      FROM restaurants r 
+      LEFT JOIN subscription_plans sp ON r.subscription_plan_id = sp.id 
+      WHERE r.id = ?
+    `, [restaurantId]) as any;
+
+    const planName = restaurant?.plan_name || 'Starter';
+
+    if (planName === 'Starter') {
+      if (exportFlag === 'true') {
+        return res.status(403).json({ error: 'REQUIRES_PREMIUM_UPGRADE' });
+      }
+
+      if (startDate) {
+        const reqStartDate = new Date(startDate as string);
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        sevenDaysAgo.setHours(0, 0, 0, 0);
+
+        if (reqStartDate < sevenDaysAgo) {
+          return res.status(403).json({ error: 'REQUIRES_PREMIUM_UPGRADE' });
+        }
+      }
+    }
+
+    let dateFilter = '';
+    const params: any[] = [restaurantId];
+
+    if (startDate && endDate) {
+      dateFilter = 'AND created_at >= ? AND created_at <= ?';
+      params.push(startDate, endDate + ' 23:59:59');
+    }
+
+    const grossRes = await db.get(`
+      SELECT SUM(total_amount) as gross
+      FROM orders
+      WHERE restaurant_id = ? AND status != 'Cancelled' ${dateFilter}
+    `, params) as any;
+    const gross_revenue = grossRes?.gross || 0;
+
+    const netRes = await db.get(`
+      SELECT SUM(net_total) as net
+      FROM orders
+      WHERE restaurant_id = ? AND status != 'Cancelled' ${dateFilter}
+    `, params) as any;
+    const net_revenue = netRes?.net || 0;
+
+    const vatRes = await db.get(`
+      SELECT SUM(vat_amount) as vat
+      FROM orders
+      WHERE restaurant_id = ? AND status != 'Cancelled' ${dateFilter}
+    `, params) as any;
+    const vat_collected = vatRes?.vat || 0;
+
+    const paymentRows = await db.all(`
+      SELECT payment_method, SUM(total_amount) as amount
+      FROM orders
+      WHERE restaurant_id = ? AND status != 'Cancelled' ${dateFilter}
+      GROUP BY payment_method
+    `, params);
+
+    const payMethods = { Cash: 0, POS_Transfer: 0, Online: 0 };
+    paymentRows.forEach((row: any) => {
+      const pm = (row.payment_method || '').trim();
+      if (!pm) return;
+      
+      const lowerPm = pm.toLowerCase();
+      if (lowerPm === 'cash') {
+        payMethods.Cash += (row.amount || 0);
+      } else if (lowerPm === 'pos_transfer' || lowerPm === 'pos' || lowerPm.includes('transfer')) {
+        payMethods.POS_Transfer += (row.amount || 0);
+      } else {
+        payMethods.Online += (row.amount || 0);
+      }
+    });
+
+    const sales_by_payment_method = [
+      { name: 'Cash', value: payMethods.Cash },
+      { name: 'POS/Transfer', value: payMethods.POS_Transfer },
+      { name: 'Online', value: payMethods.Online }
+    ];
+
+    const topItemsRows = await db.all(`
+      SELECT m.id, m.name, SUM(oi.quantity) as total_sold, m.price, m.cogs
+      FROM order_items oi
+      JOIN menu_items m ON oi.menu_item_id = m.id
+      JOIN orders o ON oi.order_id = o.id
+      WHERE o.restaurant_id = ? AND o.status != 'Cancelled' ${dateFilter.replace(/created_at/g, 'o.created_at')}
+      GROUP BY m.id
+      ORDER BY total_sold DESC
+      LIMIT 10
+    `, params) as any[];
+
+    const top_selling_items = topItemsRows.map(item => {
+      const price = item.price || 0;
+      const cogs = item.cogs || 0;
+      const profit_margin = price - cogs;
+      return {
+        id: item.id,
+        name: item.name,
+        total_sold: item.total_sold,
+        price,
+        cogs,
+        profit_margin,
+        total_revenue: item.total_sold * price,
+        total_profit: item.total_sold * profit_margin
+      };
+    });
+
+    const dailyTrendRows = await db.all(`
+      SELECT date(created_at) as date, SUM(total_amount) as sales, COUNT(*) as orders
+      FROM orders
+      WHERE restaurant_id = ? AND status != 'Cancelled' ${dateFilter}
+      GROUP BY date(created_at)
+      ORDER BY date ASC
+    `, params);
+
+    const recentOrders = await db.all(`
+      SELECT o.id, o.created_at, o.total_amount, o.status, o.payment_status, o.payment_method, t.table_number
+      FROM orders o
+      LEFT JOIN tables t ON o.table_id = t.id
+      WHERE o.restaurant_id = ? ${dateFilter}
+      ORDER BY o.created_at DESC
+      LIMIT 10
+    `, params);
+
+    res.json({
+      success: true,
+      plan_name: planName,
+      gross_revenue,
+      net_revenue,
+      vat_collected,
+      sales_by_payment_method,
+      top_selling_items,
+      daily_sales: dailyTrendRows,
+      recent_orders: recentOrders
+    });
+  } catch (error: any) {
+    console.error('Error fetching restaurant analytics:', error);
+    res.status(500).json({ error: 'Failed to fetch restaurant analytics', details: error.message });
   }
 });
 
@@ -873,6 +1175,16 @@ app.get('/api/admin/analytics', authenticateToken, authorizeRole(['admin', 'supe
       GROUP BY date(created_at)
       ORDER BY date(created_at) ASC
     `, [...trendParams]);
+    
+    // Subscriptions Plan Distribution
+    const subscriptionDistribution = await db.all(`
+      SELECT s.plan_name as planName, COUNT(r.id) as count
+      FROM restaurants r
+      JOIN subscription_plans s ON r.subscription_plan_id = s.id
+      WHERE r.status = 'Active' OR r.status = 'Pending'
+      GROUP BY s.id
+      ORDER BY count DESC
+    `);
 
     // Platform GMV (Gross Merchandise Value)
     const platformGmv = await db.get(`SELECT SUM(total_amount) as gmv FROM orders WHERE status != 'Cancelled' ${dateFilter}`, [...params]) as any;
@@ -933,7 +1245,8 @@ app.get('/api/admin/analytics', authenticateToken, authorizeRole(['admin', 'supe
       mrr: totalMrr,
       totalTaxLiability: totalTaxLiability.tax || 0,
       churnRiskCount: churnRiskRestaurants.length,
-      churnRiskRestaurants
+      churnRiskRestaurants,
+      subscriptionDistribution
     });
   } catch (error) {
     console.error('Error fetching admin analytics:', error);
@@ -1103,9 +1416,9 @@ app.patch('/api/admin/profile', authenticateToken, authorizeRole(['super_admin']
   const adminId = (req as any).user.id;
   
   if (email && password) {
-    await db.run('UPDATE users SET email = ?, password = ? WHERE id = ?', [email, password, adminId]);
+    await db.run('UPDATE users SET email = ?, password = ? WHERE id = ?', [email.trim().toLowerCase(), password, adminId]);
   } else if (email) {
-    await db.run('UPDATE users SET email = ? WHERE id = ?', [email, adminId]);
+    await db.run('UPDATE users SET email = ? WHERE id = ?', [email.trim().toLowerCase(), adminId]);
   } else if (password) {
     await db.run('UPDATE users SET password = ? WHERE id = ?', [password, adminId]);
   }
@@ -1136,7 +1449,7 @@ app.get('/api/restaurants', async (req, res) => {
     const restaurants = await db.all(`
       SELECT r.*, u.email as owner_email, s.is_vip_featured
       FROM restaurants r
-      LEFT JOIN users u ON r.id = u.restaurant_id AND u.role = 'restaurant'
+      LEFT JOIN users u ON r.id = u.restaurant_id AND u.role IN ('restaurant', 'super_admin', 'admin')
       LEFT JOIN subscription_plans s ON r.subscription_plan_id = s.id
     `) as any[];
     
@@ -1180,7 +1493,12 @@ app.get('/api/meals', async (req, res) => {
 
 app.get('/api/restaurants/:id', async (req, res) => {
   try {
-    const restaurant = await db.get('SELECT * FROM restaurants WHERE id = ?', [req.params.id]) as any;
+    const restaurant = await db.get(`
+      SELECT r.*, s.plan_name 
+      FROM restaurants r 
+      LEFT JOIN subscription_plans s ON r.subscription_plan_id = s.id 
+      WHERE r.id = ?
+    `, [req.params.id]) as any;
     if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
     
     const platformSettings = await db.get('SELECT payment_paystack_enabled, paystack_public_key, payment_monnify_enabled, monnify_api_key, monnify_contract_code, payment_flutterwave_enabled, flutterwave_public_key FROM platform_settings LIMIT 1') as any;
@@ -1529,7 +1847,7 @@ app.patch('/api/restaurants/:id/settings', authenticateToken, requireRestaurantA
 
     if (email !== undefined) {
       updates.push("email = ?");
-      values.push(email);
+      values.push(email.trim().toLowerCase());
     }
 
     if (operating_hours !== undefined) {
@@ -1652,6 +1970,7 @@ app.post('/api/admin/restaurants', authenticateToken, authorizeRole(['admin', 's
   try {
     const defaultCurrency = await db.get('SELECT default_currency FROM platform_settings LIMIT 1') as any;
     const plan = await db.get("SELECT id FROM subscription_plans WHERE plan_name = 'Starter' LIMIT 1") as any;
+    const normalizedEmail = owner_email.trim().toLowerCase();
     
     // Calculate expiry date (1 month from now)
     const expiryDate = new Date();
@@ -1659,14 +1978,14 @@ app.post('/api/admin/restaurants', authenticateToken, authorizeRole(['admin', 's
     const expiryDateStr = expiryDate.toISOString();
 
     const transaction = db.transaction(async () => {
-      const existingUser = await db.get('SELECT id FROM users WHERE email = ?', [owner_email]);
+      const existingUser = await db.get('SELECT id FROM users WHERE LOWER(email) = ?', [normalizedEmail]);
       if (existingUser) throw new Error('Email already in use');
 
       const resId = (await db.run('INSERT INTO restaurants (name, status, currency, subscription_plan_id, subscription_status, subscription_expiry_date, business_type) VALUES (?, ?, ?, ?, ?, ?, ?)', [
         name, 'Active', defaultCurrency ? defaultCurrency.default_currency : 'USD', plan ? plan.id : 1, 'Active', expiryDateStr, business_type || 'restaurant'
       ])).lastInsertRowid;
       
-      await db.run('INSERT INTO users (email, password, role, restaurant_id, email_verified) VALUES (?, ?, ?, ?, 1)', [owner_email, owner_password, 'restaurant', resId]);
+      await db.run('INSERT INTO users (email, password, role, restaurant_id, email_verified) VALUES (?, ?, ?, ?, 1)', [normalizedEmail, owner_password, 'restaurant', resId]);
       
       return resId;
     });
@@ -1683,7 +2002,7 @@ app.post('/api/admin/restaurants/:id/reset-password', authenticateToken, authori
   if (!new_password) return res.status(400).json({ error: 'New password is required' });
 
   try {
-    const result = await db.run('UPDATE users SET password = ? WHERE restaurant_id = ? AND role = \'restaurant\'', [new_password, req.params.id]);
+    const result = await db.run('UPDATE users SET password = ? WHERE restaurant_id = ? AND role IN (\'restaurant\', \'super_admin\', \'admin\')', [new_password, req.params.id]);
     // @ts-ignore
     if (result.changes > 0) {
       res.json({ success: true, message: 'Password reset successfully' });
@@ -1739,7 +2058,7 @@ app.patch('/api/admin/restaurants/:id/verify-account', authenticateToken, author
         return false;
       }
       if (status === 1) {
-        await db.run('UPDATE users SET email_verified = 1 WHERE restaurant_id = ? AND role = ?', [restaurant_id, 'restaurant']);
+        await db.run('UPDATE users SET email_verified = 1 WHERE restaurant_id = ? AND role IN (\'restaurant\', \'super_admin\', \'admin\')', [restaurant_id]);
       }
       return true;
     });
@@ -1835,9 +2154,10 @@ app.get('/api/admin/users', authenticateToken, authorizeRole(['admin', 'super_ad
 app.post('/api/admin/users', authenticateToken, authorizeRole(['admin', 'super_admin'], 'users'), async (req, res) => {
   try {
     const { email, password, role, name, restaurant_id, admin_permissions } = req.body;
+    const normalizedEmail = email.trim().toLowerCase();
     
     // Check if email already exists
-    const existing = await db.get('SELECT id FROM users WHERE email = ?', [email]);
+    const existing = await db.get('SELECT id FROM users WHERE LOWER(email) = ?', [normalizedEmail]);
     if (existing) {
       return res.status(400).json({ error: 'Email already in use' });
     }
@@ -1847,7 +2167,7 @@ app.post('/api/admin/users', authenticateToken, authorizeRole(['admin', 'super_a
       VALUES (?, ?, ?, ?, ?, 1, ?)
     `);
     
-    const result = await insert.run(email, password, role, name || null, restaurant_id || null, admin_permissions ? JSON.stringify(admin_permissions) : '[]');
+    const result = await insert.run(normalizedEmail, password, role, name || null, restaurant_id || null, admin_permissions ? JSON.stringify(admin_permissions) : '[]');
     const newUser = await db.get(`
       SELECT u.id, u.email, u.role, u.name, u.phone_number, u.email_verified, u.admin_permissions, r.name as restaurant_name
       FROM users u
@@ -2005,6 +2325,7 @@ app.get('/api/orders/:id/track', async (req, res) => {
 
 app.post('/api/orders', async (req, res) => {
   const { restaurant_id, table_id, items, total_amount, customer_email, customer_name, customer_address, special_instructions, payment_method, payment_status, paystack_reference, monnify_reference, flutterwave_reference, tip_amount, waiter_id, guest_last_name, room_number } = req.body;
+  const normalizedEmail = customer_email ? customer_email.trim().toLowerCase() : null;
   
   try {
     // Check GMV limits
@@ -2077,7 +2398,7 @@ app.post('/api/orders', async (req, res) => {
       restaurant_id, 
       final_table_id, 
       calculated_total, 
-      customer_email || null, 
+      normalizedEmail, 
       customer_name || null,
       customer_address || null,
       special_instructions || null, 
@@ -2323,58 +2644,159 @@ app.patch('/api/restaurants/:id/subscription', authenticateToken, requireRestaur
 });
 
 app.get('/api/restaurants/:id/analytics', authenticateToken, requireRestaurantAccess, async (req, res) => {
-  const { id } = req.params;
+  const restaurantId = parseInt(req.params.id);
   try {
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, export: exportFlag } = req.query;
+
+    const restaurant = await db.get(`
+      SELECT r.subscription_plan_id, sp.plan_name 
+      FROM restaurants r 
+      LEFT JOIN subscription_plans sp ON r.subscription_plan_id = sp.id 
+      WHERE r.id = ?
+    `, [restaurantId]) as any;
+
+    const planName = restaurant?.plan_name || 'Starter';
+
+    if (planName === 'Starter') {
+      if (exportFlag === 'true') {
+        return res.status(403).json({ error: 'REQUIRES_PREMIUM_UPGRADE' });
+      }
+
+      if (startDate) {
+        const reqStartDate = new Date(startDate as string);
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        sevenDaysAgo.setHours(0, 0, 0, 0);
+
+        if (reqStartDate < sevenDaysAgo) {
+          return res.status(403).json({ error: 'REQUIRES_PREMIUM_UPGRADE' });
+        }
+      }
+    }
+
     let dateFilter = '';
-    let params: any[] = [id];
-    
+    const params: any[] = [restaurantId];
+
     if (startDate && endDate) {
       dateFilter = 'AND created_at >= ? AND created_at <= ?';
       params.push(startDate, endDate + ' 23:59:59');
     }
 
-    const totalOrders = await db.get(`SELECT COUNT(*) as count FROM orders WHERE restaurant_id = ? ${dateFilter}`, [...params]) as any;
-    const totalRevenue = await db.get(`SELECT SUM(total_amount) as total FROM orders WHERE restaurant_id = ? AND status != 'Cancelled' ${dateFilter}`, [...params]) as any;
-    
-    let trendDateFilter = `created_at >= date('now', '-7 days')`;
-    let trendParams: any[] = [id];
-    if (startDate && endDate) {
-      trendDateFilter = `created_at >= ? AND created_at <= ?`;
-      trendParams.push(startDate, endDate + ' 23:59:59');
-    }
-
-    const recentRevenue = await db.all(`
-      SELECT date(created_at) as date, SUM(total_amount) as revenue, COUNT(*) as orders
+    const grossRes = await db.get(`
+      SELECT SUM(total_amount) as gross
       FROM orders
-      WHERE restaurant_id = ? AND ${trendDateFilter} AND status != 'Cancelled'
-      GROUP BY date(created_at)
-      ORDER BY date(created_at) ASC
-    `, [...trendParams]);
+      WHERE restaurant_id = ? AND status != 'Cancelled' ${dateFilter}
+    `, params) as any;
+    const gross_revenue = grossRes?.gross || 0;
 
-    const topItems = await db.all(`
-      SELECT m.name, SUM(oi.quantity) as total_sold
+    const netRes = await db.get(`
+      SELECT SUM(net_total) as net
+      FROM orders
+      WHERE restaurant_id = ? AND status != 'Cancelled' ${dateFilter}
+    `, params) as any;
+    const net_revenue = netRes?.net || 0;
+
+    const vatRes = await db.get(`
+      SELECT SUM(vat_amount) as vat
+      FROM orders
+      WHERE restaurant_id = ? AND status != 'Cancelled' ${dateFilter}
+    `, params) as any;
+    const vat_collected = vatRes?.vat || 0;
+
+    const paymentRows = await db.all(`
+      SELECT payment_method, SUM(total_amount) as amount
+      FROM orders
+      WHERE restaurant_id = ? AND status != 'Cancelled' ${dateFilter}
+      GROUP BY payment_method
+    `, params);
+
+    const payMethods = { Cash: 0, POS_Transfer: 0, Online: 0 };
+    paymentRows.forEach((row: any) => {
+      const pm = (row.payment_method || '').trim();
+      if (!pm) return;
+      
+      const lowerPm = pm.toLowerCase();
+      if (lowerPm === 'cash') {
+        payMethods.Cash += (row.amount || 0);
+      } else if (lowerPm === 'pos_transfer' || lowerPm === 'pos' || lowerPm.includes('transfer')) {
+        payMethods.POS_Transfer += (row.amount || 0);
+      } else {
+        payMethods.Online += (row.amount || 0);
+      }
+    });
+
+    const sales_by_payment_method = [
+      { name: 'Cash', value: payMethods.Cash },
+      { name: 'POS/Transfer', value: payMethods.POS_Transfer },
+      { name: 'Online', value: payMethods.Online }
+    ];
+
+    const topItemsRows = await db.all(`
+      SELECT m.id, m.name, SUM(oi.quantity) as total_sold, m.price, m.cogs
       FROM order_items oi
       JOIN menu_items m ON oi.menu_item_id = m.id
       JOIN orders o ON oi.order_id = o.id
       WHERE o.restaurant_id = ? AND o.status != 'Cancelled' ${dateFilter.replace(/created_at/g, 'o.created_at')}
       GROUP BY m.id
       ORDER BY total_sold DESC
-      LIMIT 5
-    `, [...params]);
+      LIMIT 10
+    `, params) as any[];
 
-    const aov = await db.get(`SELECT AVG(total_amount) as average FROM orders WHERE restaurant_id = ? AND status != 'Cancelled' ${dateFilter}`, [...params]) as any;
+    const top_selling_items = topItemsRows.map(item => {
+      const price = item.price || 0;
+      const cogs = item.cogs || 0;
+      const profit_margin = price - cogs;
+      return {
+        id: item.id,
+        name: item.name,
+        total_sold: item.total_sold,
+        price,
+        cogs,
+        profit_margin,
+        total_revenue: item.total_sold * price,
+        total_profit: item.total_sold * profit_margin
+      };
+    });
+
+    const dailyTrendRows = await db.all(`
+      SELECT date(created_at) as date, SUM(total_amount) as sales, COUNT(*) as orders
+      FROM orders
+      WHERE restaurant_id = ? AND status != 'Cancelled' ${dateFilter}
+      GROUP BY date(created_at)
+      ORDER BY date ASC
+    `, params);
+
+    const recentOrders = await db.all(`
+      SELECT o.id, o.created_at, o.total_amount, o.status, o.payment_status, o.payment_method, t.table_number
+      FROM orders o
+      LEFT JOIN tables t ON o.table_id = t.id
+      WHERE o.restaurant_id = ? ${dateFilter}
+      ORDER BY o.created_at DESC
+      LIMIT 10
+    `, params);
+
+    // Provide legacy fallbacks as well for complete safety
+    const totalOrdersRes = await db.get(`SELECT COUNT(*) as count FROM orders WHERE restaurant_id = ? ${dateFilter}`, params) as any;
 
     res.json({
-      totalOrders: totalOrders.count,
-      totalRevenue: totalRevenue.total || 0,
-      recentRevenue,
-      topItems,
-      averageOrderValue: aov.average || 0
+      success: true,
+      plan_name: planName,
+      gross_revenue,
+      net_revenue,
+      vat_collected,
+      sales_by_payment_method,
+      top_selling_items,
+      daily_sales: dailyTrendRows,
+      recent_orders: recentOrders,
+      // Legacy structure fallbacks
+      totalOrders: totalOrdersRes?.count || 0,
+      totalRevenue: gross_revenue,
+      recentRevenue: dailyTrendRows.map(row => ({ date: row.date, revenue: row.sales, orders: row.orders })),
+      topItems: topItemsRows
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching restaurant analytics:', error);
-    res.status(500).json({ error: 'Failed to fetch analytics' });
+    res.status(500).json({ error: 'Failed to fetch restaurant analytics', details: error.message });
   }
 });
 
@@ -2564,14 +2986,16 @@ app.get('/api/customer/orders', async (req, res) => {
     const { email } = req.query;
     if (!email) return res.status(400).json({ error: 'Email is required' });
     
+    const normalizedEmail = String(email).trim().toLowerCase();
+    
     const orders = await db.all(`
       SELECT o.*, t.table_number, t.is_room, r.name as restaurant_name, r.currency as restaurant_currency
       FROM orders o 
       LEFT JOIN tables t ON o.table_id = t.id 
       JOIN restaurants r ON o.restaurant_id = r.id
-      WHERE o.customer_email = ? 
+      WHERE LOWER(o.customer_email) = ? 
       ORDER BY o.created_at DESC
-    `, [email]);
+    `, [normalizedEmail]);
     
     const orderIds = orders.map((o: any) => o.id);
     let orderItems = [];
