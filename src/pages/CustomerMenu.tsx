@@ -80,6 +80,22 @@ export default function CustomerMenu() {
   const [customerName, setCustomerName] = useState(() => { try { return localStorage.getItem('customerName') || '' } catch(e) { return '' } });
   const [customerAddress, setCustomerAddress] = useState(() => { try { return localStorage.getItem('customerAddress') || '' } catch(e) { return '' } });
   const [orderStatus, setOrderStatus] = useState<any>(null);
+  
+  const [loyaltyPoints, setLoyaltyPoints] = useState(0);
+  const [pointsUsed, setPointsUsed] = useState(false);
+
+  useEffect(() => {
+    if (customerEmail && restaurant?.id) {
+      fetchWithRetry(`/api/customer/${encodeURIComponent(customerEmail)}/loyalty/${restaurant.id}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && typeof data.points === 'number') {
+            setLoyaltyPoints(data.points);
+          }
+        })
+        .catch(console.error);
+    }
+  }, [customerEmail, restaurant?.id]);
 
   const [favorites, setFavorites] = useState<number[]>(() => {
     try {
@@ -317,6 +333,8 @@ export default function CustomerMenu() {
       // Ignore
     }
     
+    const finalAmount = cartTotal() + tipAmount - (pointsUsed ? Math.min(loyaltyPoints / 10, cartTotal() + tipAmount) : 0);
+    
     const placeOrder = async (paystackReference?: string, monnifyReference?: string, flutterwaveReference?: string) => {
       try {
         const res = await fetch('/api/orders', {
@@ -332,8 +350,9 @@ export default function CustomerMenu() {
               notes: item.notes,
               modifiers: item.selectedModifiers
             })),
-            total_amount: cartTotal() + tipAmount,
+            total_amount: finalAmount,
             tip_amount: tipAmount,
+            points_used: pointsUsed ? Math.floor(Math.min(loyaltyPoints, (cartTotal() + tipAmount) * 10)) : 0,
             special_instructions: specialInstructions,
             customer_email: customerEmail,
             customer_name: customerName,
@@ -1134,6 +1153,18 @@ export default function CustomerMenu() {
               
               {cart.length > 0 && (
                 <div className="p-4 border-t border-ink-100 bg-ink-50">
+                  {loyaltyPoints > 0 && (
+                    <div className="mb-4 bg-brand-50 p-3 rounded-xl border border-brand-100 flex items-center justify-between">
+                      <div>
+                        <p className="font-bold text-brand-900 text-sm">Loyalty Points</p>
+                        <p className="text-xs text-brand-700">You have {loyaltyPoints} points ({getCurrencySymbol(restaurant?.currency)}{(loyaltyPoints / 10).toFixed(2)} value)</p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" checked={pointsUsed} onChange={(e) => setPointsUsed(e.target.checked)} className="sr-only peer" />
+                        <div className="w-11 h-6 bg-ink-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-ink-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500"></div>
+                      </label>
+                    </div>
+                  )}
                   <div className="space-y-2 mb-4">
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-ink-500">Subtotal</span>
@@ -1145,9 +1176,15 @@ export default function CustomerMenu() {
                         <span className="font-medium text-ink-900">{getCurrencySymbol(restaurant?.currency)}{tipAmount.toFixed(2)}</span>
                       </div>
                     )}
+                    {pointsUsed && loyaltyPoints > 0 && (
+                      <div className="flex justify-between items-center text-sm text-green-600">
+                        <span className="font-medium">Points Discount</span>
+                        <span className="font-bold">-{getCurrencySymbol(restaurant?.currency)}{Math.min(loyaltyPoints / 10, cartTotal() + tipAmount).toFixed(2)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between items-center pt-2 border-t border-ink-200">
                       <span className="text-ink-500 font-medium">Total</span>
-                      <span className="text-2xl font-bold text-ink-900">{getCurrencySymbol(restaurant?.currency)}{(cartTotal() + tipAmount).toFixed(2)}</span>
+                      <span className="text-2xl font-bold text-ink-900">{getCurrencySymbol(restaurant?.currency)}{(cartTotal() + tipAmount - (pointsUsed ? Math.min(loyaltyPoints / 10, cartTotal() + tipAmount) : 0)).toFixed(2)}</span>
                     </div>
                   </div>
                   <button 

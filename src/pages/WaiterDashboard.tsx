@@ -15,6 +15,7 @@ export default function WaiterDashboard() {
   const [waiterCalls, setWaiterCalls] = useState<any[]>([]);
   const [user, setUser] = useState<any>(null);
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'pending' | 'preparing' | 'ready' | 'completed' | 'tables'>('pending');
   const [viewMode, setViewMode] = useState<'my_orders' | 'all_orders'>('my_orders');
 
@@ -65,6 +66,8 @@ export default function WaiterDashboard() {
         }
       } catch (err) {
         console.error('Failed to fetch dashboard data', err);
+      } finally {
+        setInitialLoading(false);
       }
     };
 
@@ -171,6 +174,17 @@ export default function WaiterDashboard() {
   const preparingOrders = displayOrders.filter(o => o.status === 'Preparing' || o.status === 'Accepted');
   const readyOrders = displayOrders.filter(o => o.status === 'Ready');
   const completedOrders = displayOrders.filter(o => o.status === 'Delivered');
+
+  if (initialLoading) {
+    return (
+      <div className="min-h-screen bg-ink-50 flex items-center justify-center">
+        <div className="flex flex-col items-center">
+          <div className="w-12 h-12 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="mt-4 text-ink-600 font-medium tracking-wide">Loading Waiter Dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-ink-50">

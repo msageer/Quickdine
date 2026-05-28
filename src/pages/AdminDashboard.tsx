@@ -9,6 +9,7 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [adminDashboardData, setAdminDashboardData] = useState<any>(null);
   const [adminDashboardLoading, setAdminDashboardLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [restaurants, setRestaurants] = useState<any[]>([]);
   const [selectedRestaurant, setSelectedRestaurant] = useState<any>(null);
   const [isEditingRestaurant, setIsEditingRestaurant] = useState(false);
@@ -285,6 +286,8 @@ export default function AdminDashboard() {
       } catch (err) {
         console.error('Failed to fetch data', err);
         setAdminDashboardLoading(false);
+      } finally {
+        setInitialLoading(false);
       }
     };
     fetchData();
@@ -502,6 +505,17 @@ export default function AdminDashboard() {
 
   const pendingRestaurants = restaurants.filter(r => r.status === 'Pending');
   const otherRestaurants = restaurants.filter(r => r.status !== 'Pending');
+
+  if (initialLoading) {
+    return (
+      <div className="min-h-screen bg-ink-50 flex items-center justify-center">
+        <div className="flex flex-col items-center">
+          <div className="w-12 h-12 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="mt-4 text-ink-600 font-medium tracking-wide">Loading Admin Portal...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 bg-ink-50 flex">

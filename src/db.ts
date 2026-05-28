@@ -29,9 +29,11 @@ function convertQuery(sql: string, params: any[]): [string, any[]] {
   let newSql = sql;
   
   // Convert SQLite date functions to Postgres
-  newSql = newSql.replace(/strftime\('%Y-%m',\s*([^)]+)\)/g, "to_char($1, 'YYYY-MM')");
+  newSql = newSql.replace(/strftime\('%Y-%W',\s*([^)]+)\)/gi, "to_char($1, 'IYYY-IW')");
+  newSql = newSql.replace(/strftime\('%Y-%m',\s*([^)]+)\)/gi, "to_char($1, 'YYYY-MM')");
+  newSql = newSql.replace(/strftime\('%H',\s*([^)]+)\)/gi, "to_char($1, 'HH24')");
   newSql = newSql.replace(/date\('now',\s*'-(\d+)\s*days'\)/g, "CURRENT_DATE - INTERVAL '$1 days'");
-  newSql = newSql.replace(/date\(([^)]+)\)/gi, "DATE($1)");
+  newSql = newSql.replace(/date\(([^)]+)\)/gi, "CAST($1 AS DATE)");
   newSql = newSql.replace(/login_time/g, "login_time"); // Safety
   
   // SQLite IFNULL -> COALESCE

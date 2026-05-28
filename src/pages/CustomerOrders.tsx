@@ -10,6 +10,7 @@ export default function CustomerOrders() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState<any[]>([]);
   const [orderItems, setOrderItems] = useState<any[]>([]);
+  const [loyaltyPoints, setLoyaltyPoints] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [expandedOrder, setExpandedOrder] = useState<number | null>(null);
@@ -49,6 +50,7 @@ export default function CustomerOrders() {
         const data = await res.json();
         setOrders(data.orders);
         setOrderItems(data.orderItems);
+        setLoyaltyPoints(data.loyaltyPoints || []);
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -175,6 +177,25 @@ export default function CustomerOrders() {
       </div>
 
       <div className="flex-1 max-w-3xl w-full mx-auto p-4">
+        {loyaltyPoints.length > 0 && (
+           <div className="bg-gradient-to-r from-brand-600 to-brand-800 rounded-3xl p-6 shadow-md mb-6 text-white overflow-hidden relative">
+             <div className="absolute -right-4 -top-4 opacity-10">
+               <Receipt className="w-32 h-32" />
+             </div>
+             <h2 className="text-xl font-bold font-serif mb-4 relative z-10 flex items-center">
+               Loyalty Points
+             </h2>
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-10">
+               {loyaltyPoints.map((lp, idx) => (
+                 <div key={idx} className="bg-white/10 rounded-xl p-4 backdrop-blur-sm border border-white/20">
+                   <p className="text-xs font-semibold text-brand-100 uppercase tracking-wider">{lp.restaurant_name}</p>
+                   <p className="text-2xl font-black">{lp.points} <span className="text-sm font-medium text-brand-200">pts</span></p>
+                 </div>
+               ))}
+             </div>
+           </div>
+        )}
+        
         {error ? (
           <div className="bg-red-50 text-red-600 p-4 rounded-xl text-center">
             {error}

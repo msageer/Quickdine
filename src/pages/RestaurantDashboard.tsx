@@ -48,6 +48,7 @@ export default function RestaurantDashboard() {
   const [isTableModalOpen, setIsTableModalOpen] = useState(false);
   const [editingTable, setEditingTable] = useState<any>(null);
   const [newTableNumber, setNewTableNumber] = useState('');
+  const [initialLoading, setInitialLoading] = useState(true);
   const [newTableAddress, setNewTableAddress] = useState('');
   const [newTableIsRoom, setNewTableIsRoom] = useState(false);
   const [inlineEditingTableId, setInlineEditingTableId] = useState<number | null>(null);
@@ -149,6 +150,8 @@ export default function RestaurantDashboard() {
         }
       } catch (err) {
         console.error('Failed to fetch dashboard data', err);
+      } finally {
+        setInitialLoading(false);
       }
     };
 
@@ -161,6 +164,7 @@ export default function RestaurantDashboard() {
       setOrders(prev => [data.order, ...prev]);
       setOrderItems(prev => [...data.items, ...prev]);
       setNewOrderAlert(data.order);
+      showToast(`New Order #${data.order.id} received!`, 'success');
       // Play sound
       const audio = new Audio('/notification.mp3'); // Assuming we have a sound file
       audio.play().catch(e => console.log('Audio play failed', e));
@@ -661,6 +665,17 @@ export default function RestaurantDashboard() {
   const preparingOrders = sortOrders(orders.filter(o => ['Accepted', 'Preparing'].includes(o.status)));
   const readyOrders = sortOrders(orders.filter(o => o.status === 'Ready'));
   const completedOrders = sortOrders(orders.filter(o => o.status === 'Delivered'));
+
+  if (initialLoading) {
+    return (
+      <div className="min-h-screen bg-ink-50 flex items-center justify-center">
+        <div className="flex flex-col items-center">
+          <div className="w-12 h-12 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="mt-4 text-ink-600 font-medium tracking-wide">Loading Restaurant Portal...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (restaurant?.status === 'Pending') {
     return <RestaurantOnboarding restaurant={restaurant} onComplete={() => setRestaurant({ ...restaurant, status: 'Active' })} />;
@@ -3306,10 +3321,22 @@ function OrderCard({ order, items, onUpdateStatus, onAssignWaiter, onUpdatePayme
               exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden"
             >
-              <ul className="space-y-2 mb-4">
-                {items.map(item => (
-                  <li key={item.id} className="text-sm flex justify-between">
-                    <span className="text-ink-700"><span className="font-medium text-ink-900">{item.quantity}x</span> {item.name}</span>
+              <ul className="space-y-4 mb-4">
+                {Object.entries(items.reduce((acc, item) => {
+                  const cat = item.category_name || 'Other';
+                  if (!acc[cat]) acc[cat] = [];
+                  acc[cat].push(item);
+                  return acc;
+                }, {} as Record<string, typeof items>)).map(([category, catItems]) => (
+                  <li key={category}>
+                    <div className="text-xs font-bold text-ink-500 uppercase tracking-wider mb-2 border-b border-ink-100 pb-1">{category}</div>
+                    <ul className="space-y-2">
+                      {catItems.map((item: any) => (
+                        <li key={item.id} className="text-sm flex justify-between">
+                          <span className="text-ink-700"><span className="font-medium text-ink-900">{item.quantity}x</span> {item.name}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </li>
                 ))}
               </ul>

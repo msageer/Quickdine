@@ -10,7 +10,7 @@ export default function Home() {
   const [slides, setSlides] = useState<any[]>([]);
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [selectedItem, setSelectedItem] = useState<any>(null);
-
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const getCurrencySymbol = (currencyCode: string) => {
@@ -73,10 +73,23 @@ export default function Home() {
       } catch (err: any) {
         console.error('Failed to fetch data', err);
         setError(err.message || 'Failed to load data. Please try again later.');
+      } finally {
+        setLoading(false);
       }
     };
     fetchData();
   }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-ink-50 flex items-center justify-center">
+        <div className="flex flex-col items-center">
+          <div className="w-12 h-12 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="mt-4 text-ink-600 font-medium tracking-wide">Loading QuickDine Platform...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-ink-50 flex-1">
