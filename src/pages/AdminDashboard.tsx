@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Users, Store, Activity, Settings, PlusCircle, CheckCircle, XCircle, Info, Mail, Calendar, X, ClipboardList, User, TrendingUp, DollarSign, ShoppingBag, CheckCircle2, AlertCircle, CreditCard, LogIn, BellRing, UserPlus, Download, Plus, Receipt, BarChart3, LogOut, Key, Star, Image, Trash2 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, Legend } from 'recharts';
 import { fetchWithRetry, apiFetch } from '../lib/utils';
+import { io } from 'socket.io-client';
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -252,10 +253,14 @@ export default function AdminDashboard() {
           fetchWithRetry('/api/admin/dashboard').catch(err => {
             console.error('Network error fetching admin dashboard:', err);
             throw err;
+          }),
+          fetchWithRetry('/api/admin/analytics').catch(err => {
+            console.error('Network error fetching analytics:', err);
+            throw err;
           })
         ]);
         
-        const [resRestaurants, resSettings, resPlans, resSlides, resDashboard] = results;
+        const [resRestaurants, resSettings, resPlans, resSlides, resDashboard, resAnalytics] = results;
         
         if (resRestaurants.status === 'fulfilled' && resRestaurants.value.ok) {
           setRestaurants(await resRestaurants.value.json());
@@ -272,15 +277,30 @@ export default function AdminDashboard() {
         if (resDashboard.status === 'fulfilled' && resDashboard.value.ok) {
           setAdminDashboardData(await resDashboard.value.json());
         }
+        if (resAnalytics.status === 'fulfilled' && resAnalytics.value.ok) {
+          setAnalytics(await resAnalytics.value.json());
+        }
 
         setAdminDashboardLoading(false);
-        await fetchAnalytics();
       } catch (err) {
         console.error('Failed to fetch data', err);
         setAdminDashboardLoading(false);
       }
     };
     fetchData();
+
+    const socket = io();
+    socket.emit('join_admin');
+
+    socket.on('new_platform_order', (data) => {
+      showToast(`New platform order placed at ${data.order.restaurant_name} for ₦${data.order.total_amount}`, 'success');
+      const audio = new Audio('/notification.mp3');
+      audio.play().catch(() => {});
+    });
+
+    return () => {
+      socket.disconnect();
+    };
   }, []);
 
   useEffect(() => {

@@ -105,6 +105,11 @@ export default function RestaurantDashboard() {
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
+        let analyticsUrl = `/api/restaurants/${id}/analytics`;
+        if (analyticsStartDate && analyticsEndDate) {
+          analyticsUrl += `?startDate=${analyticsStartDate}&endDate=${analyticsEndDate}`;
+        }
+
         const results = await Promise.allSettled([
           fetchWithRetry(`/api/restaurants/${id}`),
           fetchWithRetry(`/api/restaurants/${id}/orders`),
@@ -112,10 +117,11 @@ export default function RestaurantDashboard() {
           fetchWithRetry(`/api/restaurants/${id}/tables`),
           fetchWithRetry(`/api/restaurants/${id}/waiters`),
           fetchWithRetry(`/api/restaurants/${id}/waiter-calls`),
-          fetchWithRetry(`/api/subscription-plans`)
+          fetchWithRetry(`/api/subscription-plans`),
+          fetchWithRetry(analyticsUrl)
         ]);
         
-        const [resRes, ordersRes, menuRes, tablesRes, waitersRes, callsRes, plansRes] = results;
+        const [resRes, ordersRes, menuRes, tablesRes, waitersRes, callsRes, plansRes, analyticsRes] = results;
         
         if (resRes.status === 'fulfilled' && resRes.value.ok) setRestaurant(await resRes.value.json());
         if (plansRes.status === 'fulfilled' && plansRes.value.ok) setSubscriptionPlans(await plansRes.value.json());
@@ -138,8 +144,9 @@ export default function RestaurantDashboard() {
         if (callsRes.status === 'fulfilled' && callsRes.value.ok) {
           setWaiterCalls(await callsRes.value.json());
         }
-        
-        await fetchAnalytics();
+        if (analyticsRes.status === 'fulfilled' && analyticsRes.value.ok) {
+          setAnalytics(await analyticsRes.value.json());
+        }
       } catch (err) {
         console.error('Failed to fetch dashboard data', err);
       }

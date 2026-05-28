@@ -2431,9 +2431,10 @@ app.post('/api/orders', async (req, res) => {
   try {
     const orderId = await transaction();
     const newOrder = await db.get(`
-      SELECT o.*, t.table_number 
+      SELECT o.*, t.table_number, r.name as restaurant_name 
       FROM orders o 
       LEFT JOIN tables t ON o.table_id = t.id 
+      LEFT JOIN restaurants r ON o.restaurant_id = r.id
       WHERE o.id = ?
     `, [orderId]) as any;
     
@@ -2446,6 +2447,7 @@ app.post('/api/orders', async (req, res) => {
     
     // Notify restaurant via WebSocket
     io.to(`restaurant_${restaurant_id}`).emit('new_order', { order: newOrder, items: newOrderItems });
+    io.to('admin').emit('new_platform_order', { order: newOrder, items: newOrderItems });
     
     if (newOrder.customer_email) {
       const parsedItems = newOrderItems as any[];
@@ -3023,6 +3025,11 @@ io.on('connection', (socket) => {
   socket.on('join_restaurant', (restaurantId) => {
     socket.join(`restaurant_${restaurantId}`);
     console.log(`Socket ${socket.id} joined restaurant_${restaurantId}`);
+  });
+
+  socket.on('join_admin', () => {
+    socket.join('admin');
+    console.log(`Socket ${socket.id} joined admin`);
   });
   
   socket.on('join_order', (orderId) => {
