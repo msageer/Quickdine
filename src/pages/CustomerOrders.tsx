@@ -65,7 +65,7 @@ export default function CustomerOrders() {
 
   useEffect(() => {
     if (orders.length > 0) {
-      const socket = io();
+      const socket = io(import.meta.env.VITE_API_BASE_URL || '');
       
       orders.forEach(order => {
         socket.emit('join_order', order.id);

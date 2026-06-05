@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Utensils, Lock, Mail, Store } from 'lucide-react';
 import { motion } from 'motion/react';
 import { signInWithGoogle } from '../firebase';
+import { apiFetch } from '../lib/utils';
 
 export default function Login() {
   const [loginType, setLoginType] = useState<'admin_restaurant' | 'waiter'>('admin_restaurant');
@@ -21,7 +22,7 @@ export default function Login() {
       setError('');
       const token = await result.user.getIdToken();
       
-      const res = await fetch('/api/auth/google', {
+      const res = await apiFetch('/api/auth/google', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ credential: token, isLoginOnly: true })
@@ -62,7 +63,7 @@ export default function Login() {
       const endpoint = loginType === 'waiter' ? '/api/auth/waiter-login' : '/api/auth/login';
       const body = loginType === 'waiter' ? { phone_number: phoneNumber, pin } : { email, password };
 
-      const res = await fetch(endpoint, {
+      const res = await apiFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)

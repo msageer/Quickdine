@@ -1,3 +1,8 @@
+const getApiUrl = (path: string) => {
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+  return path.startsWith('http') ? path : `${baseUrl}${path}`;
+};
+
 export const fetchWithRetry = async (url: string, options: RequestInit = {}, retries = 3, delay = 1000) => {
   const token = localStorage.getItem('token');
   const headers = new Headers(options.headers || {});
@@ -11,9 +16,11 @@ export const fetchWithRetry = async (url: string, options: RequestInit = {}, ret
     headers,
   };
 
+  const finalUrl = getApiUrl(url);
+
   for (let i = 0; i < retries; i++) {
     try {
-      const res = await fetch(url, enhancedOptions);
+      const res = await fetch(finalUrl, enhancedOptions);
       if (!res.ok) {
         // If it's a 4xx error (like 401 Unauthorized or 404 Not Found), don't retry
         if (res.status >= 400 && res.status < 500) {
@@ -38,5 +45,5 @@ export const apiFetch = async (url: string, options: RequestInit = {}) => {
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  return fetch(url, { ...options, headers });
+  return fetch(getApiUrl(url), { ...options, headers });
 };

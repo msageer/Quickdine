@@ -34,7 +34,7 @@ export default function OrderTracking() {
 
   useEffect(() => {
     if (order) {
-      const socket = io();
+      const socket = io(import.meta.env.VITE_API_BASE_URL || '');
       socket.emit('join_order', order.id);
 
       socket.on('order_status_update', (data) => {

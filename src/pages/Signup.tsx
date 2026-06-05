@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Utensils, Lock, Mail, Store, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { signInWithGoogle } from '../firebase';
+import { apiFetch } from '../lib/utils';
 
 export default function Signup() {
   const [email, setEmail] = useState('');
@@ -21,7 +22,7 @@ export default function Signup() {
       setError('');
       const token = await result.user.getIdToken();
 
-      const res = await fetch('/api/auth/google', {
+      const res = await apiFetch('/api/auth/google', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -56,7 +57,7 @@ export default function Signup() {
     setLoading(true);
 
     try {
-      const res = await fetch('/api/auth/signup', {
+      const res = await apiFetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, restaurantName, businessType })

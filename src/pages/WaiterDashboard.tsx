@@ -73,7 +73,7 @@ export default function WaiterDashboard() {
 
     fetchDashboardData();
 
-    const socket = io();
+    const socket = io(import.meta.env.VITE_API_BASE_URL || '');
     socket.emit('join_restaurant', id);
 
     socket.on('new_order', (data) => {

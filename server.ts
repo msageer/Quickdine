@@ -10,6 +10,7 @@ import { Resend } from 'resend';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
 import fs from 'fs';
+import cors from 'cors';
 import crypto from 'crypto';
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
@@ -147,6 +148,7 @@ const requireRestaurantAccess = (req: express.Request, res: express.Response, ne
 };
 
 const app = express();
+app.use(cors());
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: { origin: '*' }

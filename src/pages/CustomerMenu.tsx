@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ShoppingCart, Plus, Minus, ChevronRight, Clock, AlertCircle, ArrowRight, CheckCircle2, Trash2, Receipt, Heart, Info, MapPin, Phone, Mail, CreditCard, Banknote, X, MessageCircle, Bell, Search } from 'lucide-react';
 import { io } from 'socket.io-client';
 import PaystackPop from '@paystack/inline-js';
-import { fetchWithRetry } from '../lib/utils';
+import { fetchWithRetry, apiFetch } from '../lib/utils';
 import { GuestValidationModal } from '../components/GuestValidationModal';
 
 export default function CustomerMenu() {
@@ -42,7 +42,7 @@ export default function CustomerMenu() {
     if (!rid || !tid) return;
     setIsCallingWaiter(true);
     try {
-      const res = await fetch(`/api/restaurants/${rid}/tables/${tid}/call`, {
+      const res = await apiFetch(`/api/restaurants/${rid}/tables/${tid}/call`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type })
@@ -267,7 +267,7 @@ export default function CustomerMenu() {
 
   useEffect(() => {
     if (orderStatus?.id) {
-      const socket = io();
+      const socket = io(import.meta.env.VITE_API_BASE_URL || '');
       socket.emit('join_order', orderStatus.id);
       
       socket.on('order_status_update', (data) => {
@@ -337,7 +337,7 @@ export default function CustomerMenu() {
     
     const placeOrder = async (paystackReference?: string, monnifyReference?: string, flutterwaveReference?: string) => {
       try {
-        const res = await fetch('/api/orders', {
+        const res = await apiFetch('/api/orders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

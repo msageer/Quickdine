@@ -292,7 +292,7 @@ export default function AdminDashboard() {
     };
     fetchData();
 
-    const socket = io();
+    const socket = io(import.meta.env.VITE_API_BASE_URL || '');
     socket.emit('join_admin');
 
     socket.on('new_platform_order', (data) => {
