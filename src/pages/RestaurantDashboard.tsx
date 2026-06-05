@@ -3327,11 +3327,11 @@ function OrderCard({ order, items, onUpdateStatus, onAssignWaiter, onUpdatePayme
                   if (!acc[cat]) acc[cat] = [];
                   acc[cat].push(item);
                   return acc;
-                }, {} as Record<string, typeof items>)).map(([category, catItems]) => (
+                }, {} as Record<string, any[]>)).map(([category, catItems]) => (
                   <li key={category}>
                     <div className="text-xs font-bold text-ink-500 uppercase tracking-wider mb-2 border-b border-ink-100 pb-1">{category}</div>
                     <ul className="space-y-2">
-                      {catItems.map((item: any) => (
+                      {(catItems as any[]).map((item: any) => (
                         <li key={item.id} className="text-sm flex justify-between">
                           <span className="text-ink-700"><span className="font-medium text-ink-900">{item.quantity}x</span> {item.name}</span>
                         </li>

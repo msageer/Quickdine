@@ -385,7 +385,7 @@ export default function CustomerMenu() {
 
           if (viaWhatsApp && restaurant?.phone) {
             const orderDetails = cart.map(item => `${item.quantity}x ${item.name}`).join('%0A');
-            const total = cartTotal().toFixed(2);
+            const total = finalAmount.toFixed(2);
             const currency = getCurrencySymbol(restaurant?.currency);
             let message = `Hello! I would like to place an order:%0A%0A${orderDetails}%0A%0ATotal: ${currency}${total}`;
             if (customerName) message += `%0A%0AName: ${customerName}`;
@@ -410,7 +410,7 @@ export default function CustomerMenu() {
       paystack.newTransaction({
         key: restaurant.paystack_public_key || restaurant.platform_paystack_public_key,
         email: customerEmail,
-        amount: Math.round((cartTotal() + tipAmount) * 100), // Paystack expects amount in kobo/cents
+        amount: Math.round(finalAmount * 100), // Paystack expects amount in kobo/cents
         currency: restaurant.currency || 'USD',
         onSuccess: (transaction: any) => {
           placeOrder(transaction.reference);
@@ -424,7 +424,7 @@ export default function CustomerMenu() {
       if (window.MonnifySDK) {
         // @ts-ignore
         window.MonnifySDK.initialize({
-          amount: cartTotal() + tipAmount,
+          amount: finalAmount,
           currency: restaurant.currency || 'NGN',
           reference: new String((new Date()).getTime()),
           customerFullName: customerName || customerEmail.split('@')[0] || 'Customer',
@@ -453,7 +453,7 @@ export default function CustomerMenu() {
         window.FlutterwaveCheckout({
           public_key: restaurant.flutterwave_public_key || restaurant.platform_flutterwave_public_key,
           tx_ref: `tx-${Date.now()}`,
-          amount: cartTotal() + tipAmount,
+          amount: finalAmount,
           currency: restaurant.currency || 'NGN',
           payment_options: "card, mobilemoneyghana, ussd",
           customer: {
